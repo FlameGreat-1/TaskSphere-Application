@@ -1,0 +1,568 @@
+Django==4.2.5
+djangorestframework==3.14.0
+django-cors-headers==4.0.0
+djoser==2.1.0
+djangorestframework-simplejwt==5.2.2
+python-jose==3.3.0
+psycopg2==2.9.7
+django-redis==5.3.1
+sqlalchemy==2.0.20
+aiosmtplib==1.2.1
+Pillow==10.0.0
+passlib[bcrypt]==1.7.4
+celery==5.3.1
+redis==5.0.0
+flake8==6.0.0
+black==23.3.0
+pytest==7.4.0
+drf-yasg==1.21.6
+django-allauth
+requests
+cryptography
+six
+dj-rest-auth
+
+
+
+pip install django-allauth dj-rest-auth django-cors-headers
+
+pip install django djangorestframework django-cors-headers twilio
+
+pip install firebase-admin
+
+
+
+
+Download the Firebase Admin SDK JSON file from your Firebase Console and place it in a secure location in your project.
+
+Add an fcm_token field to your User model or create a separate model to store FCM tokens for each user's devices.
+
+Implement logic to update the user's FCM token when they log in on a new device or refresh their token.
+
+
+
+
+
+########################################################
+
+
+import os
+import logging
+from rest_framework import generics, permissions, status
+from rest_framework.response import Response
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
+from django.utils import timezone
+from .models import Task, SubTask, Category, Tag, TimeLog, Comment, Attachment
+from .serializers import (
+    TaskSerializer, SubTaskSerializer, CategorySerializer, TagSerializer,
+    TimeLogSerializer, CommentSerializer, AttachmentSerializer
+)
+from django.conf import settings
+import requests
+from datetime import timedelta
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import Flow
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
+from googleapiclient.errors import HttpError
+
+logger = logging.getLogger(__name__)
+
+# Task List (GET), Task Create (POST)
+class TaskListCreateView(generics.ListCreateAPIView):
+    serializer_class = TaskSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Task.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+# Task Retrieve (GET), Task Update (PUT), Task Delete (DELETE)
+class TaskDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = TaskSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    lookup_url_kwarg = 'task_id'
+
+    def get_queryset(self):
+        return Task.objects.filter(user=self.request.user)
+
+# Subtask List (GET), Subtask Create (POST)
+class SubTaskCreateView(generics.ListCreateAPIView):
+    serializer_class = SubTaskSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        task = Task.objects.get(id=self.kwargs['task_id'], user=self.request.user)
+        return SubTask.objects.filter(task=task)
+
+    def perform_create(self, serializer):
+        task = Task.objects.get(id=self.kwargs['task_id'], user=self.request.user)
+        serializer.save(task=task)
+
+# Category List (GET), Category Create (POST)
+class CategoryListCreateView(generics.ListCreateAPIView):
+    serializer_class = CategorySerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Category.objects.all()
+
+# Tag List (GET), Tag Create (POST)
+class TagListCreateView(generics.ListCreateAPIView):
+    serializer_class = TagSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Tag.objects.all()
+
+# TimeLog List (GET), TimeLog Create (POST)
+class TimeLogListCreateView(generics.ListCreateAPIView):
+    serializer_class = TimeLogSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        task = Task.objects.get(id=self.kwargs['task_id'], user=self.request.user)
+        return TimeLog.objects.filter(task=task)
+
+    def perform_create(self, serializer):
+        task = Task.objects.get(id=self.kwargs['task_id'], user=self.request.user)
+        serializer.save(task=task)
+
+# Task Assign to a user
+class TaskAssignView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, task_id):
+        try:
+            task = Task.objects.get(id=task_id, user=request.user)
+            user = request.data.get('assignee')  # Assignee from request data
+            task.assigned_to.add(user)
+            task.save()
+            return Response({'message': 'Task assigned successfully.'}, status=status.HTTP_200_OK)
+        except Task.DoesNotExist:
+            return Response({'error': 'Task not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+# Comment on a task
+class CommentCreateView(generics.ListCreateAPIView):
+    serializer_class = CommentSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        task = Task.objects.get(id=self.kwargs['task_id'], user=self.request.user)
+        return Comment.objects.filter(task=task)
+
+    def perform_create(self, serializer):
+        task = Task.objects.get(id=self.kwargs['task_id'], user=self.request.user)
+        serializer.save(task=task, user=self.request.user)
+
+# File Attachment to a task
+class AttachmentCreateView(generics.ListCreateAPIView):
+    serializer_class = AttachmentSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        task = Task.objects.get(id=self.kwargs['task_id'], user=self.request.user)
+        return Attachment.objects.filter(task=task)
+
+    def perform_create(self, serializer):
+        task = Task.objects.get(id=self.kwargs['task_id'], user=self.request.user)
+        serializer.save(task=task)
+
+# Snooze a reminder
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def snooze_reminder(request, task_id):
+    try:
+        task = Task.objects.get(id=task_id, user=request.user)
+        snooze_time = request.data.get('snooze_time', 10)  # Default to 10 minutes
+        task.reminder_time = timezone.now() + timedelta(minutes=snooze_time)
+        task.save()
+        return Response({'message': 'Reminder snoozed.'}, status=status.HTTP_200_OK)
+    except Task.DoesNotExist:
+        return Response({'error': 'Task not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+# Task Reminder Notification (Email, Push, SMS)
+class TaskReminderView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, task_id):
+        from . import send_task_reminder
+        try:
+            task = Task.objects.get(id=task_id, user=request.user)
+            send_task_reminder(task)
+
+            # Push notification via Firebase Cloud Messaging (FCM)
+            fcm_url = 'https://fcm.googleapis.com/fcm/send'
+            headers = {
+                'Authorization': f'key={settings.FCM_SERVER_KEY}',
+                'Content-Type': 'application/json'
+            }
+            data = {
+                'to': task.user.device_token,
+                'notification': {
+                    'title': 'Task Reminder',
+                    'body': f'Task "{task.title}" is due soon!',
+                }
+            }
+            requests.post(fcm_url, json=data, headers=headers)
+
+            # SMS Notification via Twilio
+            twilio_url = 'https://api.twilio.com/2010-04-01/Accounts/{AccountSID}/Messages.json'
+            requests.post(
+                twilio_url,
+                data={
+                    'To': task.user.phone_number,
+                    'Message': f'Task Reminder: {task.title} is due soon.',
+                },
+                headers={'Authorization': 'Bearer your_twilio_api_key'}
+            )
+            return Response({'message': 'Reminder sent.'}, status=status.HTTP_200_OK)
+        except Task.DoesNotExist:
+            return Response({'error': 'Task not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+# Task Progress Update
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def update_task_progress(request, task_id):
+    try:
+        task = Task.objects.get(id=task_id, user=request.user)
+        progress = request.data.get('progress')
+        if progress == 'complete':
+            task.is_completed = True
+        else:
+            task.progress = progress
+        task.save()
+        return Response({'message': 'Task progress updated.'}, status=status.HTTP_200_OK)
+    except Task.DoesNotExist:
+        return Response({'error': 'Task not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+# Custom task filtering (e.g., by priority, tags, deadlines)
+class TaskFilterView(generics.ListAPIView):
+    serializer_class = TaskSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = Task.objects.filter(user=self.request.user)
+        priority = self.request.query_params.get('priority', None)
+        tag = self.request.query_params.get('tag', None)
+        deadline = self.request.query_params.get('deadline', None)
+
+        if priority:
+            queryset = queryset.filter(priority=priority)
+        if tag:
+            queryset = queryset.filter(tags__name=tag)
+        if deadline:
+            queryset = queryset.filter(due_date__lte=deadline)
+
+        return queryset
+
+
+# Base Google API client setup
+def get_google_service(service_name, version, user):
+    credentials = Credentials.from_authorized_user_info(user.google_credentials)
+    return build(service_name, version, credentials=credentials)
+
+# Google Authentication
+class GoogleAuthView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        flow = Flow.from_client_secrets_file(
+            'C:/Users/USER/Downloads/skilled-nation-404607-db50d00d6ee8.json',
+            scopes=[
+                'https://www.googleapis.com/auth/calendar',
+                'https://www.googleapis.com/auth/drive.file',
+                'https://www.googleapis.com/auth/documents',
+                'https://www.googleapis.com/auth/spreadsheets',
+                'https://www.googleapis.com/auth/forms.body'
+            ],
+            redirect_uri='http://localhost:8000/google/callback/'
+        )
+        authorization_url, state = flow.authorization_url(access_type='offline')
+        request.session['google_auth_state'] = state
+        return Response({'authorization_url': authorization_url})
+
+    def get_callback(self, request):
+        flow = Flow.from_client_secrets_file(
+            'C:/Users/USER/Downloads/skilled-nation-404607-db50d00d6ee8.json',
+            state=request.session['google_auth_state'],
+            redirect_uri='http://localhost:8000/google/callback/'
+        )
+        flow.fetch_token(authorization_response=request.build_absolute_uri())
+        credentials = flow.credentials
+        request.user.google_credentials = credentials.to_json()  # Save to user model
+        request.user.save()
+        return Response({'message': 'Google authentication successful.'})
+
+# Google Calendar Event Creation
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def create_google_calendar_event(request, task_id):
+    try:
+        task = Task.objects.get(id=task_id, user=request.user)
+        service = get_google_service('calendar', 'v3', request.user)
+
+        event = {
+            'summary': task.title,
+            'description': task.description,
+            'start': {
+                'dateTime': task.start_date.isoformat(),
+                'timeZone': 'America/Los_Angeles',
+            },
+            'end': {
+                'dateTime': task.due_date.isoformat(),
+                'timeZone': 'America/Los_Angeles',
+            },
+        }
+
+        service.events().insert(calendarId='primary', body=event).execute()
+        return Response({'message': 'Task added to Google Calendar.'}, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+# Upload File to Google Drive
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def upload_to_google_drive(request, attachment_id):
+    try:
+        attachment = Attachment.objects.get(id=attachment_id, task__user=request.user)
+        service = get_google_service('drive', 'v3', request.user)
+
+        file_metadata = {'name': attachment.file.name}
+        media = MediaFileUpload(attachment.file.path, mimetype='application/octet-stream')
+
+        file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+        return Response({'message': 'File uploaded to Google Drive.', 'file_id': file.get('id')}, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+# Create Google Sheets
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def create_google_sheet(request):
+    try:
+        service = get_google_service('sheets', 'v4', request.user)
+        spreadsheet = {
+            'properties': {
+                'title': 'New Task Spreadsheet'
+            }
+        }
+        spreadsheet = service.spreadsheets().create(body=spreadsheet, fields='spreadsheetId').execute()
+        return Response({'message': 'Spreadsheet created.', 'spreadsheetId': spreadsheet.get('spreadsheetId')}, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+# Create Google Document
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def create_google_document(request):
+    try:
+        service = get_google_service('docs', 'v1', request.user)
+        document = {
+            'title': 'New Task Document'
+        }
+        doc = service.documents().create(body=document).execute()
+        return Response({'message': 'Document created.', 'documentId': doc.get('documentId')}, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+# Create Google Form
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def create_google_form(request):
+    try:
+        service = get_google_service('forms', 'v1', request.user)
+        form = {
+            'title': 'New Task Form',
+            'description': 'This form is for task feedback.'
+        }
+        created_form = service.forms().create(body=form).execute()
+        return Response({'message': 'Form created.', 'formId': created_form.get('formId')}, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+# Get Google Drive Files
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def list_google_drive_files(request):
+    try:
+        service = get_google_service('drive', 'v3', request.user)
+        results = service.files().list(pageSize=10, fields="nextPageToken, files(id, name)").execute()
+        files = results.get('files', [])
+        return Response({'files': files}, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+# Get Google Sheets Data
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def get_google_sheet_data(request, spreadsheet_id):
+    try:
+        service = get_google_service('sheets', 'v4', request.user)
+        result = service.spreadsheets().values().get(spreadsheetId=spreadsheet_id, range='Sheet1!A1:E10').execute()
+        values = result.get('values', [])
+        return Response({'values': values}, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+# Update Google Document
+@api_view(['PATCH'])
+@permission_classes([permissions.IsAuthenticated])
+def update_google_document(request, document_id):
+    try:
+        service = get_google_service('docs', 'v1', request.user)
+        requests = [
+            {
+                'insertText': {
+                    'location': {
+                        'index': 1,
+                    },
+                    'text': 'Hello, world!'
+                }
+            },
+        ]
+        service.documents().batchUpdate(documentId=document_id, body={'requests': requests}).execute()
+        return Response({'message': 'Document updated successfully.'}, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+# Add Questions to Google Form
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def add_questions_to_google_form(request, form_id):
+    try:
+        service = get_google_service('forms', 'v1', request.user)
+        questions = [
+            {
+                "questionItem": {
+                    "question": {
+                        "title": "What is your feedback?",
+                        "questionItemType": "TEXT",
+                        "textQuestion": {}
+                    }
+                }
+            },
+        ]
+        service.forms().batchUpdate(formId=form_id, body={"requests": questions}).execute()
+        return Response({'message': 'Questions added to Google Form.'}, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+# Get Google Calendar Events
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def list_google_calendar_events(request):
+    try:
+        service = get_google_service('calendar', 'v3', request.user)
+        events_result = service.events().list(calendarId='primary', maxResults=10, singleEvents=True,
+                                              orderBy='startTime').execute()
+        events = events_result.get('items', [])
+        return Response({'events': events}, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+# Delete Google Drive File
+@api_view(['DELETE'])
+@permission_classes([permissions.IsAuthenticated])
+def delete_google_drive_file(request, file_id):
+    try:
+        service = get_google_service('drive', 'v3', request.user)
+        service.files().delete(fileId=file_id).execute()
+        return Response({'message': 'File deleted successfully.'}, status=status.HTTP_204_NO_CONTENT)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def update_google_sheet_data(request, spreadsheet_id):
+    """
+    Update specific cells in a Google Sheet.
+    :param request: The request containing updated values.
+    :param spreadsheet_id: The ID of the spreadsheet to update.
+    :return: A response indicating the success or failure of the update.
+    """
+    values = request.data.get('values')  # Expecting a list of lists for batch updates
+    if not values:
+        return Response({'error': 'No values provided for update.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        service = get_google_service('sheets', 'v4', request.user)
+        body = {
+            'values': values
+        }
+        service.spreadsheets().values().update(
+            spreadsheetId=spreadsheet_id,
+            range='Sheet1!A1',  # Specify the range based on your requirements
+            valueInputOption='RAW',
+            body=body
+        ).execute()
+        logger.info(f'Spreadsheet {spreadsheet_id} updated successfully.')
+        return Response({'message': 'Spreadsheet updated successfully.'}, status=status.HTTP_200_OK)
+
+    except HttpError as e:
+        logger.error(f'Failed to update spreadsheet: {e}')
+        return Response({'error': 'Failed to update spreadsheet.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    except Exception as e:
+        logger.error(f'An unexpected error occurred: {e}')
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def update_google_calendar_event(request, event_id):
+    """
+    Update an existing Google Calendar event.
+    :param request: The request containing updated event details.
+    :param event_id: The ID of the event to update.
+    :return: A response indicating the success or failure of the update.
+    """
+    updated_summary = request.data.get('summary')  # Get updated summary from request
+    if not updated_summary:
+        return Response({'error': 'No summary provided for update.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        service = get_google_service('calendar', 'v3', request.user)
+        event = service.events().get(calendarId='primary', eventId=event_id).execute()
+
+        # Update the event summary or other details as needed
+        event['summary'] = updated_summary
+        service.events().update(calendarId='primary', eventId=event_id, body=event).execute()
+        logger.info(f'Event {event_id} updated successfully.')
+        return Response({'message': 'Event updated successfully.'}, status=status.HTTP_200_OK)
+
+    except HttpError as e:
+        logger.error(f'Failed to update calendar event: {e}')
+        return Response({'error': 'Failed to update calendar event.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    except Exception as e:
+        logger.error(f'An unexpected error occurred: {e}')
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_google_form_responses(request, form_id):
+    """
+    Retrieve responses from a specified Google Form.
+    :param request: The request to retrieve form responses.
+    :param form_id: The ID of the form to retrieve responses from.
+    :return: A response containing the form responses or an error message.
+    """
+    try:
+        service = get_google_service('forms', 'v1', request.user)
+        response = service.forms().responses().list(formId=form_id).execute()
+        logger.info(f'Retrieved responses for form {form_id}.')
+        return Response({'responses': response.get('responses', [])}, status=status.HTTP_200_OK)
+
+    except HttpError as e:
+        logger.error(f'Failed to retrieve form responses: {e}')
+        return Response({'error': 'Failed to retrieve form responses.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    except Exception as e:
+        logger.error(f'An unexpected error occurred: {e}')
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
