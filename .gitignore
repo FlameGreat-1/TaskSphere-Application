@@ -33,6 +33,11 @@ venv/
 env/
 .venv/
 
+# config
+backend/config/*.json
+backend/config/__pycache__/
+
+
 # IDEs
 .vscode/
 .idea/
