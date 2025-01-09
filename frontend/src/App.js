@@ -7,6 +7,10 @@ import { GlobalStyles } from './styles/GlobalStyles';
 import { QueryClient, QueryClientProvider } from 'react-query';
 import { NotificationProvider } from './context/NotificationContext';
 import { SocketProvider } from './context/SocketContext';
+import { AuthProvider } from './context/AuthContext';
+import { Provider } from 'react-redux';
+import { store } from './store'; 
+
 import HomePage from './pages/HomePage';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -16,7 +20,6 @@ import AccountActivation from './components/AccountActivation';
 import Navbar from './components/Navbar';
 import PasswordReset from './pages/PasswordReset';
 import ResetPasswordConfirm from './pages/ResetPasswordConfirm';
-import { AuthProvider } from './context/AuthContext';
 import TaskList from './components/TaskList';
 import TaskDetail from './components/TaskDetails';
 import CreateTask from './components/CreateTask';
@@ -26,11 +29,14 @@ import Notification from './components/Notification';
 import NotificationPopup from './components/NotificationPopup';
 import Settings from './components/Settings';
 import FeaturesPage from './pages/FeaturesPage';
-import Dashboard from './components/Dashboard';  
-import ProtectedRoute from './pages/ProtectedRoute'; 
+import Dashboard from './components/Dashboard';
+import ProtectedRoute from './pages/ProtectedRoute';
+import ProfileHome from './pages/ProfileHome';
+import AIIntegration from './components/AIIntegration';
+
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import ProfileHome from './pages/ProfileHome';
+
 import { 
   fetchTasks, 
   createTask, 
@@ -166,76 +172,76 @@ const App = () => {
   };
 
   return (
-    <GoogleOAuthProvider clientId="1087053886578-7vp5m8dr89b5lacu5286a4529ev0ucht.apps.googleusercontent.com">
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <NotificationProvider>
-            <SocketProvider>
-              <ThemeProvider theme={isDarkMode ? darkTheme : lightTheme}>
-                <GlobalStyles />
-                <Router>
-                  <Navbar />
-                  <Routes>
-                    {/* Public routes */}
-                    <Route path="/" element={<HomePage />} />
-                    <Route path="/login" element={<Login />} />
-                    <Route path="/register" element={<Register />} />
-                    <Route path="/logout" element={<Logout />} />
-                    <Route path="/activate/:uidb64/:token/:userId" element={<AccountActivation />} />
-                    <Route path="/password-reset" element={<PasswordReset />} />
-                    <Route path="/reset-password/:uidb64/:token" element={<ResetPasswordConfirm />} />
-                    <Route path="/features" element={<FeaturesPage />} />
-                    <Route path="/profile-home" element={<ProfileHome />} />
-                    <Route path="/notification" element={<Notification />} />
-                    <Route path="/google-services" element={<ProfileHome />} />
-                    <Route path="/calendar" element={
-                      <Calendar 
-                        events={calendarEvents}
-                        onEventCreated={handleCalendarEventCreated}
-                        onEventUpdated={handleCalendarEventUpdated}
-                        onEventDeleted={handleCalendarEventDeleted}
-                        onToggleTaskCompletion={handleToggleTaskCompletion}
-                        onRescheduleTask={handleRescheduleTask}
-                        fetchEvents={fetchCalendarEventsData}
-                      />
-                    } />
-                    <Route path="/analytics" element={<Analytics />} />
-                    <Route path="/dashboard" element={<Dashboard tasks={tasks} />} />
-                    <Route path="/profile" element={<Profile />} />
-                    <Route path="/tasks" element={
-                      <TaskList 
-                        tasks={tasks} 
-                        onTaskCreated={handleTaskCreated}
-                        onTaskUpdated={handleTaskUpdated}
-                        onTaskDeleted={handleTaskDeleted}
-                      />
-                    } />
-                    <Route path="/tasks/create" element={<CreateTask onTaskCreated={handleTaskCreated} />} />
-                    <Route path="/tasks/:id" element={<TaskDetail tasks={tasks} onTaskUpdated={handleTaskUpdated} />} />
-                    <Route path="/settings" element={<Settings toggleDarkMode={() => setIsDarkMode(!isDarkMode)} />} />
-                    <Route path="/task-categories" element={<ProfileHome />} />
-                    <Route path="/task-tags" element={<ProfileHome />} />
-                    <Route path="/time-tracking" element={<ProfileHome />} />
-                    <Route path="/manage-tags" element={<ProfileHome />} />
-                    <Route path="/manage-categories" element={<ProfileHome />} />
-
-                    {/* Protected routes */}
-                    <Route element={<ProtectedRoute />}>
+    <Provider store={store}>
+      <GoogleOAuthProvider clientId="1087053886578-7vp5m8dr89b5lacu5286a4529ev0ucht.apps.googleusercontent.com">
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <NotificationProvider>
+              <SocketProvider>
+                <ThemeProvider theme={isDarkMode ? darkTheme : lightTheme}>
+                  <GlobalStyles />
+                  <Router>
+                    <Navbar />
+                    <Routes>
+                      {/* Public routes */}
+                      <Route path="/" element={<HomePage />} />
+                      <Route path="/login" element={<Login />} />
+                      <Route path="/register" element={<Register />} />
+                      <Route path="/logout" element={<Logout />} />
+                      <Route path="/activate/:uidb64/:token/:userId" element={<AccountActivation />} />
+                      <Route path="/password-reset" element={<PasswordReset />} />
+                      <Route path="/reset-password/:uidb64/:token" element={<ResetPasswordConfirm />} />
+                      <Route path="/features" element={<FeaturesPage />} />
                       <Route path="/profile-home" element={<ProfileHome />} />
-                    </Route>
+                      <Route path="/notification" element={<Notification />} />
+                      <Route path="/google-services" element={<AIIntegration />} />
+                      <Route path="/calendar" element={
+                        <Calendar 
+                          events={calendarEvents}
+                          onEventCreated={handleCalendarEventCreated}
+                          onEventUpdated={handleCalendarEventUpdated}
+                          onEventDeleted={handleCalendarEventDeleted}
+                        />
+                      } />
+                      <Route path="/analytics" element={<Analytics />} />
+                      <Route path="/dashboard" element={<Dashboard />} />
+                      <Route path="/profile" element={<Profile />} />
+                      <Route path="/tasks" element={
+                        <TaskList 
+                          tasks={tasks}
+                          onTaskUpdated={handleTaskUpdated}
+                          onTaskDeleted={handleTaskDeleted}
+                          onToggleCompletion={handleToggleTaskCompletion}
+                        />
+                      } />
+                      <Route path="/tasks/create" element={<CreateTask onTaskCreated={handleTaskCreated} />} />
+                      <Route path="/tasks/:id" element={<TaskDetail />} />
+                      <Route path="/settings" element={<Settings toggleDarkMode={() => setIsDarkMode(!isDarkMode)} />} />
+                      <Route path="/task-categories" element={<div>Task Categories</div>} />
+                      <Route path="/task-tags" element={<div>Task Tags</div>} />
+                      <Route path="/time-tracking" element={<div>Time Tracking</div>} />
+                      <Route path="/manage-tags" element={<div>Manage Tags</div>} />
+                      <Route path="/manage-categories" element={<div>Manage Categories</div>} />
+                      <Route path="/ai-insights" element={<AIIntegration />} />
+                      
+                      {/* Protected routes */}
+                      <Route element={<ProtectedRoute />}>
+                        <Route path="/profile-home" element={<ProfileHome />} />
+                      </Route>
 
-                    {/* Catch-all route for 404 */}
-                    <Route path="*" element={<div>Page Not Found</div>} />
-                  </Routes>
-                  <ToastContainer />
-                  <NotificationPopup />
-                </Router>
-              </ThemeProvider>
-            </SocketProvider>
-          </NotificationProvider>
-        </AuthProvider>
-      </QueryClientProvider>
-    </GoogleOAuthProvider>
+                      {/* Catch-all route for 404 */}
+                      <Route path="*" element={<div>Page Not Found</div>} />
+                    </Routes>
+                    <ToastContainer />
+                    <NotificationPopup />
+                  </Router>
+                </ThemeProvider>
+              </SocketProvider>
+            </NotificationProvider>
+          </AuthProvider>
+        </QueryClientProvider>
+      </GoogleOAuthProvider>
+    </Provider>
   );
 };
 

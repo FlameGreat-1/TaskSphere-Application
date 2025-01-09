@@ -373,7 +373,7 @@ class TaskReminderView(APIView):
         requests.post(fcm_url, json=data, headers=headers)
 
     def _send_sms_notification(self, task):
-        twilio_url = 'https://api.twilio.com/2010-04-01/Accounts/{AccountSID}/Messages.json'
+        twilio_url = 'https://api.twilio.com/2024-04-01/Accounts/{AccountSID}/Messages.json'
         requests.post(
             twilio_url,
             data={
@@ -417,7 +417,7 @@ def get_google_service(service_name, version, user):
 class GoogleAuthView(APIView):
     permission_classes = [IsAuthenticated]
 
-    GOOGLE_CLIENT_SECRETS_FILE = 'C:/Users/USER/Downloads/skilled-nation-404607-db50d00d6ee8.json'
+    GOOGLE_CLIENT_SECRETS_FILE = 'Enter Google client secret file directory here'
 
     def get(self, request):
         flow = Flow.from_client_secrets_file(

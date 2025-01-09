@@ -24,7 +24,7 @@ SCOPES = [
 ]
 
 # Path to the service account JSON file
-SERVICE_ACCOUNT_FILE = 'C:/Users/USER/Downloads/skilled-nation-404607-db50d00d6ee8.json'
+SERVICE_ACCOUNT_FILE = 'Enter service account json file directory here'
 
 credentials = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
 

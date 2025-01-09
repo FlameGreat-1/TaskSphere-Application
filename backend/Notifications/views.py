@@ -18,6 +18,13 @@ from django.db.models import Q
 from rest_framework.exceptions import ValidationError
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
+from django.db.models import Count
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
+from django.core.cache import cache
+
+
+
 
 
 class NotificationViewSet(viewsets.ModelViewSet):
@@ -185,6 +192,16 @@ def create_notification(user, title, message, priority='low', category=None, act
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+@cache_page(60)  
 def unread_notifications_count(request):
-    count = Notification.objects.filter(user=request.user, read_at__isnull=True).count()
+    cache_key = f'unread_notifications_count_{request.user.id}'
+    count = cache.get(cache_key)
+    if count is None:
+        count = Notification.objects.filter(
+            user=request.user, 
+            read_at__isnull=True
+        ).aggregate(count=Count('id'))['count']
+        cache.set(cache_key, count, 60)  
     return Response({'count': count})
+
+

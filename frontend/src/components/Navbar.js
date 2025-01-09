@@ -49,8 +49,13 @@ const Navbar = () => {
 
   const handleLogout = async (e) => {
     e.preventDefault();
-    await logout();
-    navigate('/');
+    try {
+      await logout();
+      navigate('/');
+    } catch (error) {
+      console.error('Logout failed', error);
+      // You might want to add some user feedback here for failed logout
+    }
   };
 
   const handleGoHome = (e) => {
@@ -89,6 +94,7 @@ const Navbar = () => {
           <NavItem><NavLink to="/profile">Profile</NavLink></NavItem>
           <NavItem><NavLink to="/settings">Settings</NavLink></NavItem>
           <NavItem><NavLink to="/notifications">Notifications</NavLink></NavItem>
+          <NavItem><NavLink to="/ai-insights">AI Insights</NavLink></NavItem>
           
           {isAuthenticated ? (
             <>
@@ -97,9 +103,9 @@ const Navbar = () => {
               {isGoogleAuthenticated ? (
                 <NavItem><NavLink to="/google-services"><FaGoogle /> Google Services</NavLink></NavItem>
               ) : (
-                <NavItem><NavLink to="#" onClick={authenticateWithGoogle}><FaGoogle /> Connect Google</NavLink></NavItem>
+                <NavItem><NavLink to="/Connect Google" onClick={authenticateWithGoogle}><FaGoogle /> Connect Google</NavLink></NavItem>
               )}
-              <NavItem><NavLink to="/Home" onClick={handleLogout}>Logout</NavLink></NavItem>
+              <NavItem><NavLink to="/logout" onClick={handleLogout}>Logout</NavLink></NavItem>
             </>
           ) : (
             <>

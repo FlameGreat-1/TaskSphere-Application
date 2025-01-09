@@ -25,6 +25,9 @@ urlpatterns = [
     path('api/', include('Tasks.urls')),
     #path('api/', include('Notifications.urls')),
     path('api/notifications/', include('Notifications.urls')),
+    path('api/AI/', include('AI.urls')),
+
+
 
 ]
 

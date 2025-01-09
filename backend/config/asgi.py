@@ -12,7 +12,7 @@ django_asgi_app = get_asgi_application()
 socketio_asgi_app = socketio.ASGIApp(sio, django_asgi_app)
 
 application = ProtocolTypeRouter({
-    "http": socketio_asgi_app,
+    "http": django_asgi_app,
     "websocket": AuthMiddlewareStack(
         URLRouter([
             re_path(r'^socket.io/', socketio_asgi_app),

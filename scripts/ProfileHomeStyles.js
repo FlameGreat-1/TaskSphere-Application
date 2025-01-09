@@ -1,1132 +1,1271 @@
-// React and Router imports
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 
-// Third-party libraries
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import styled from 'styled-components';
+import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import { motion, AnimatePresence } from 'framer-motion';
-import { toast } from 'react-toastify';
+import { FaClock, FaCheck } from 'react-icons/fa';
+import { FaPlus, FaEllipsisV, FaTimes, FaTrash, FaList, FaBriefcase, FaDumbbell, FaHome, FaRing, FaRocket, FaBook, FaBox, FaPlane, FaHandHoldingHeart, FaMobileAlt, FaChartLine, FaUtensils, FaMusic, FaSeedling, FaShieldAlt, FaTrophy, FaLeaf, FaMicrophone, FaRobot, FaRecycle, FaLanguage } from 'react-icons/fa';
+import { getTemplates, totalTemplateCount } from './Templates';
+import { v4 as uuidv4 } from 'uuid';
+import TemplateLazyLoader from './TemplateLazyLoader';
 
-// Icons
-import { 
-  FaBars, 
-  FaTasks, 
-  FaCalendarAlt, 
-  FaGoogle, 
-  FaChartBar, 
-  FaUserCircle, 
-  FaBell, 
-  FaCog, 
-  FaSignOutAlt, 
-  FaHome, 
-  FaClipboardList, 
-  FaPlus, 
-  FaClock, 
-  FaTag, 
-  FaFolder, 
-  FaArrowLeft, 
-} from 'react-icons/fa';
 
-// Context
-import { useAuth } from '../context/AuthContext';
 
-// Components
-import CreateTask from '../components/CreateTask';
-import GoogleServices from '../components/GoogleServices';
+// Theme
+const theme = {
+  primary: '#4A90E2',
+  secondary: '#50C878',
+  background: '#F4F5F7',
+  cardBackground: '#FFFFFF',
+  text: '#172B4D',
+  lightText: '#5E6C84',
+  border: '#E2E4E6',
+  danger: '#FF5630',
+  success: '#36B37E',
+  warning: '#FFAB00',
+};
 
-// API Services
-import {
-  // Task Management
-  fetchTasks,
-  updateTask,
-  deleteTask,
-  fetchSubTasks,
-  createSubTask,
-  updateTaskProgress,
-  assignTask,
-  
-  // Categories and Tags
-  fetchCategories,
-  createCategory,
-  deleteCategory,
-  fetchTags,
-  createTag,
-  deleteTag,
-  
-  // Time and Reminders
-  fetchTimeLogs,
-  createTimeLog,
-  snoozeReminder,
-  sendTaskReminder,
-  
-  // Task Interactions
-  createComment,
-  createAttachment,
-  filterTasks,
-  
-  // Google Integration
-  loginWithGoogle,
-  createGoogleCalendarEvent,
-  uploadToGoogleDrive,
-  createGoogleSheet,
-  createGoogleDocument,
-  createGoogleForm,
-  listGoogleDriveFiles,
-  getGoogleSheetData,
-  updateGoogleDocument,
-  addQuestionsToGoogleForm,
-  listGoogleCalendarEvents,
-  deleteGoogleDriveFile,
-  updateGoogleSheetData,
-  updateGoogleCalendarEvent,
-} from '../services/api';
+// Basic styled components
+const Input = styled.input`
+  padding: 8px;
+  border: 1px solid ${theme.border};
+  border-radius: 4px;
+  font-size: 14px;
+`;
 
-import {
-  PageContainer,
-  Sidebar,
-  MainContent,
-  MenuToggle,
-  MenuItem,
-  DropdownContainer,
-  DropdownContent,
-  ProfileSection,
-  WelcomeMessage,
-  QuickActions,
-  ActionButton,
-  TaskList,
-  Task,
-  TaskTitle,
-  TaskDescription,
-  TaskActions,
-  TaskActionButton,
-  Input,
-  TextArea,
-  Button,
-  FileInput,
-  Select,
-  Label,
-  ErrorMessage,
-  Spinner,
-  Section,
-  SectionTitle,
-  Card,
-  CardContent,
-  Badge,
-  ProgressBar,
-  ProgressFill,
-  Header,
-  HeaderTitle,
-  DropdownToggle,
-  UserIcon,
-  ChevronIcon,
-  HeaderDropdown,
-  DropdownItem,
-  DropdownMenu,
-  ContentWrapper,
-  FormGroup,
-  TaskDetailHeader,
-  TaskTitleContainer,
-  TaskDetailsContainer,
-  TaskInfoCard,
-  TagsContainer,
-  DetailSection,
-  ProgressContainer,
-  InputGroup,
-  SubtaskList,
-  SubtaskItem,
-  FileUploadZone,
-  TimeTrackingContainer,
-  ReminderContainer
-} from '../components/ProfileHomeStyles';
+const Button = styled.button`
+  padding: 8px 16px;
+  background-color: ${theme.primary};
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: bold;
 
-const ProfileHome = () => {
-  // State Management
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isTasksDropdownOpen, setIsTasksDropdownOpen] = useState(false);
-  const [isHeaderDropdownOpen, setIsHeaderDropdownOpen] = useState(false);
-  const [tasks, setTasks] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [tags, setTags] = useState([]);
-  const [showCreateTask, setShowCreateTask] = useState(false);
-  const [selectedTask, setSelectedTask] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [filterPriority, setFilterPriority] = useState('');
-  const [filterTag, setFilterTag] = useState('');
-  const [filterDeadline, setFilterDeadline] = useState('');
-  const [newSubtask, setNewSubtask] = useState('');
-  const [newCategory, setNewCategory] = useState('');
-  const [newTag, setNewTag] = useState('');
-  const [logDuration, setLogDuration] = useState('');
-  const [newComment, setNewComment] = useState('');
-  const [taskProgress, setTaskProgress] = useState(0);
-  const [spreadsheetId, setSpreadsheetId] = useState('');
-  const [documentId, setDocumentId] = useState('');
-  const [documentContent, setDocumentContent] = useState('');
-  const [formId, setFormId] = useState('');
-  const [formQuestions, setFormQuestions] = useState([]);
-  const [isGoogleAuthenticated, setIsGoogleAuthenticated] = useState(false);
-  const [activeView, setActiveView] = useState('tasks');
-  const [selectedUserId, setSelectedUserId] = useState('');
-  const [snoozeTime, setSnoozeTime] = useState('');
+  &:hover {
+    background-color: ${theme.primary}dd;
+  }
+`;
 
-  const navigate = useNavigate();
-  const { user, refreshUserProfile, logout } = useAuth();
+// Styled Components
+const KanbanContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background-color: ${theme.background};
+  padding: 20px;
+  overflow-x: auto;
+`;
 
-  // Effect for initial data fetching
+const BoardHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+`;
+
+const BoardTitle = styled.h1`
+  font-size: 24px;
+  color: ${theme.text};
+  margin: 0;
+`;
+
+const ColumnsContainer = styled.div`
+  display: flex;
+  gap: 20px;
+  overflow-x: auto;
+  padding-bottom: 20px;
+`;
+
+const Column = styled.div`
+  background-color: ${theme.cardBackground};
+  border-radius: 8px;
+  width: 300px;
+  min-width: 300px;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 100px);
+`;
+
+const ColumnHeader = styled.div`
+  padding: 12px;
+  font-weight: bold;
+  border-bottom: 1px solid ${theme.border};
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+`;
+
+const ColumnTitle = styled.h2`
+  font-size: 16px;
+  margin: 0;
+  color: ${theme.text};
+`;
+
+const TaskList = styled.div`
+  padding: 8px;
+  flex-grow: 1;
+  overflow-y: auto;
+`;
+
+const Task = styled(motion.div)`
+  background-color: ${theme.cardBackground};
+  border-radius: 4px;
+  padding: 12px;
+  margin-bottom: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
+  cursor: pointer;
+`;
+
+const TaskTitle = styled.h3`
+  font-size: 14px;
+  margin: 0 0 8px 0;
+  color: ${theme.text};
+`;
+
+const TaskDescription = styled.p`
+  font-size: 12px;
+  color: ${theme.lightText};
+  margin: 0;
+`;
+
+const TaskMeta = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+  flex-wrap: wrap;
+`;
+
+const TaskPriority = styled.span`
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-weight: bold;
+  color: white;
+  background-color: ${props => 
+    props.priority === 'high' ? theme.danger :
+    props.priority === 'medium' ? theme.warning :
+    theme.success
+  };
+`;
+
+const AddButton = styled.button`
+  background-color: transparent;
+  border: none;
+  color: ${theme.primary};
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  padding: 8px;
+
+  &:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+    border-radius: 4px;
+  }
+`;
+
+const ModalOverlay = styled(motion.div)`
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+`;
+
+const ModalContent = styled(motion.div)`
+  background-color: ${theme.cardBackground};
+  padding: 24px;
+  border-radius: 8px;
+  width: 400px;
+  max-width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+`;
+
+const SubtaskList = styled.div`
+  margin-top: 16px;
+`;
+
+const SubtaskItem = styled.div`
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+`;
+
+const SubtaskCheckbox = styled.input`
+  margin-right: 8px;
+`;
+
+const SubtaskDeleteButton = styled.button`
+  background: none;
+  border: none;
+  color: ${theme.danger};
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px;
+`;
+
+const SubtaskAddButton = styled(Button)`
+  padding: 4px 8px;
+  font-size: 12px;
+`;
+
+const EstimatedTimeInput = styled(Input)`
+  width: 100%;
+`;
+
+const TaskMetaItem = styled.span`
+  font-size: 11px;
+  color: ${theme.lightText};
+  margin-right: 8px;
+  margin-bottom: 4px;
+`;
+
+const ButtonGroup = styled.div`
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 16px;
+`;
+
+const Form = styled.form`
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+`;
+
+const SubtaskInput = styled(Input)`
+  margin-right: 8px;
+`;
+
+const TextArea = styled.textarea`
+  padding: 8px;
+  border: 1px solid ${theme.border};
+  border-radius: 4px;
+  font-size: 14px;
+  resize: vertical;
+  min-height: 100px;
+`;
+
+const Select = styled.select`
+  padding: 8px;
+  border: 1px solid ${theme.border};
+  border-radius: 4px;
+  font-size: 14px;
+`;
+
+const CloseButton = styled.button`
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: ${theme.lightText};
+`;
+
+const TemplateButton = styled(motion.button)`
+  display: flex;
+  align-items: center;
+  background-color: ${theme.cardBackground};
+  border: 1px solid ${theme.border};
+  border-radius: 8px;
+  padding: 12px;
+  margin: 8px;
+  width: calc(50% - 16px);
+  cursor: pointer;
+  transition: all 0.3s ease;
+
+  &:hover {
+    background-color: ${theme.primary}10;
+    border-color: ${theme.primary};
+  }
+`;
+
+const TemplateIcon = styled.div`
+  font-size: 24px;
+  margin-right: 12px;
+  color: ${props => props.color};
+`;
+
+const TemplateInfo = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+`;
+
+const TemplateName = styled.span`
+  font-weight: bold;
+  color: ${theme.text};
+`;
+
+const TemplateCategory = styled.span`
+  font-size: 12px;
+  color: ${theme.lightText};
+`;
+
+const TemplateGrid = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 0 8px;
+`;
+
+const LoadMoreButton = styled(Button)`
+  width: 100%;
+  margin-top: 16px;
+`;
+
+
+// Mock data
+const initialData = {
+  tasks: {
+    'task-1': { 
+      id: 'task-1', 
+      title: 'Create login page', 
+      description: 'Implement user authentication', 
+      dueDate: '2023-06-15', 
+      priority: 'high',
+      subtasks: [
+        { id: 'subtask-1-1', title: 'Design login form', completed: false },
+        { id: 'subtask-1-2', title: 'Implement authentication logic', completed: false }
+      ],
+      estimatedTime: '8h'
+    },
+    'task-2': { 
+      id: 'task-2', 
+      title: 'Design database schema', 
+      description: 'Plan the structure for user data', 
+      dueDate: '2023-06-20', 
+      priority: 'medium',
+      subtasks: [
+        { id: 'subtask-2-1', title: 'Identify data entities', completed: false },
+        { id: 'subtask-2-2', title: 'Define relationships', completed: false }
+      ],
+      estimatedTime: '6h'
+    },
+    'task-3': { 
+      id: 'task-3', 
+      title: 'Set up CI/CD pipeline', 
+      description: 'Automate deployment process', 
+      dueDate: '2023-06-25', 
+      priority: 'low',
+      subtasks: [
+        { id: 'subtask-3-1', title: 'Configure Jenkins', completed: false },
+        { id: 'subtask-3-2', title: 'Set up automated testing', completed: false }
+      ],
+      estimatedTime: '10h'
+    },
+    'task-4': { 
+      id: 'task-4', 
+      title: 'Implement responsive design', 
+      description: 'Ensure app works on mobile devices', 
+      dueDate: '2023-06-30', 
+      priority: 'medium',
+      subtasks: [
+        { id: 'subtask-4-1', title: 'Create mobile layouts', completed: false },
+        { id: 'subtask-4-2', title: 'Test on various devices', completed: false }
+      ],
+      estimatedTime: '12h'
+    },
+  },
+  columns: {
+    'column-1': {
+      id: 'column-1',
+      title: 'To Do',
+      taskIds: ['task-1', 'task-2'],
+    },
+    'column-2': {
+      id: 'column-2',
+      title: 'In Progress',
+      taskIds: ['task-3'],
+    },
+    'column-3': {
+      id: 'column-3',
+      title: 'Done',
+      taskIds: ['task-4'],
+    },
+  },
+  columnOrder: ['column-1', 'column-2', 'column-3'],
+};
+
+
+const TemplateItem = ({ template, onSelect, getTemplateIcon }) => (
+  <TemplateButton
+    onClick={() => onSelect(template)}
+    whileHover={{ scale: 1.05 }}
+    whileTap={{ scale: 0.95 }}
+  >
+    <TemplateIcon color={template.color}>
+      {getTemplateIcon(template.icon)}
+    </TemplateIcon>
+    <TemplateInfo>
+      <TemplateName>{template.name}</TemplateName>
+      <TemplateCategory>{template.categories.join(', ')}</TemplateCategory>
+    </TemplateInfo>
+  </TemplateButton>
+);
+
+const KanbanBoard = () => {
+  const [boardData, setBoardData] = useState(initialData);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [currentTask, setCurrentTask] = useState(null);
+  const [newColumnTitle, setNewColumnTitle] = useState('');
+  const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
+  const [showManageTaskModal, setShowManageTaskModal] = useState(false);
+  const [taskToManage, setTaskToManage] = useState(null);
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
+  const [isSubtaskModalOpen, setIsSubtaskModalOpen] = useState(false);
+  const [isSetTimeModalOpen, setIsSetTimeModalOpen] = useState(false);
+  const [showEndTimeInput, setShowEndTimeInput] = useState(false);
+  const [taskToSetTime, setTaskToSetTime] = useState(null);
+  const [templates, setTemplates] = useState([]);
+  const templateLoader = useMemo(() => new TemplateLazyLoader(), []);
+
+
+  const [templateListColumn, setTemplateListColumn] = useState({
+    id: 'template-list',
+    title: 'Template List',
+    taskIds: [],
+  });
+
   useEffect(() => {
-    fetchData();
+    setBoardData({
+      ...initialData,
+      columns: {
+        ...initialData.columns,
+        'template-list': {
+          id: 'template-list',
+          title: 'Template List',
+          taskIds: [],
+        },
+      },
+      columnOrder: [...initialData.columnOrder, 'template-list'],
+    });
   }, []);
 
   useEffect(() => {
-    if (selectedTask) {
-      fetchSubtasks(selectedTask.id);
-      fetchTimeLogs(selectedTask.id);
-      fetchComments(selectedTask.id);
-      fetchAttachments(selectedTask.id);
-    }
-  }, [selectedTask]);
-
-
-  const fetchData = async () => {
-    setIsLoading(true);
-    try {
-      const [tasksData, categoriesData, tagsData] = await Promise.all([
-        fetchTasks(),
-        fetchCategories(),
-        fetchTags()
-      ]);
-      setTasks(tasksData.data);
-      setCategories(categoriesData.data);
-      setTags(tagsData.data);
-    } catch (error) {
-      setError('Error fetching data');
-      toast.error('Error fetching data');
-    }
-    setIsLoading(false);
-  };
-
-  // Navigation and Menu Handlers
-  const toggleMenu = () => setIsMenuOpen(!isMenuOpen);
-  const toggleTasksDropdown = () => setIsTasksDropdownOpen(!isTasksDropdownOpen);
-  const toggleHeaderDropdown = () => setIsHeaderDropdownOpen(!isHeaderDropdownOpen);
+    const loadTemplates = async () => {
+      const initialChunk = await templateLoader.loadNextChunk();
+      setTemplates(initialChunk);
+      const allTemplates = getTemplates();
+      setTemplates(prevTemplates => [...prevTemplates, ...allTemplates.filter(t => !prevTemplates.some(pt => pt.id === t.id))]);
+    };
+    loadTemplates();
+  }, [templateLoader]);
   
-  // Task Management Handlers
-  const handleUpdateTask = async (taskId, updatedData) => {
-    setIsLoading(true);
-    try {
-      const updatedTask = await updateTask(taskId, updatedData);
-      setTasks(tasks.map(task => task.id === taskId ? updatedTask.data : task));
-      toast.success('Task updated successfully');
-    } catch (error) {
-      setError('Error updating task');
-      toast.error('Error updating task');
+  
+  const onDragEnd = (result) => {
+    const { destination, source, draggableId, type } = result;
+
+    if (!destination) {
+      return;
     }
-    setIsLoading(false);
+
+    if (
+      destination.droppableId === source.droppableId &&
+      destination.index === source.index
+    ) {
+      return;
+    }
+
+    if (type === 'column') {
+      const newColumnOrder = Array.from(boardData.columnOrder);
+      newColumnOrder.splice(source.index, 1);
+      newColumnOrder.splice(destination.index, 0, draggableId);
+
+      const newState = {
+        ...boardData,
+        columnOrder: newColumnOrder,
+      };
+      setBoardData(newState);
+      return;
+    }
+
+    const start = boardData.columns[source.droppableId];
+    const finish = boardData.columns[destination.droppableId];
+
+    if (start === finish) {
+      const newTaskIds = Array.from(start.taskIds);
+      newTaskIds.splice(source.index, 1);
+      newTaskIds.splice(destination.index, 0, draggableId);
+
+      const newColumn = {
+        ...start,
+        taskIds: newTaskIds,
+      };
+
+      const newState = {
+        ...boardData,
+        columns: {
+          ...boardData.columns,
+          [newColumn.id]: newColumn,
+        },
+      };
+
+      setBoardData(newState);
+      return;
+    }
+
+    const startTaskIds = Array.from(start.taskIds);
+    startTaskIds.splice(source.index, 1);
+    const newStart = {
+      ...start,
+      taskIds: startTaskIds,
+    };
+
+    const finishTaskIds = Array.from(finish.taskIds);
+    finishTaskIds.splice(destination.index, 0, draggableId);
+    const newFinish = {
+      ...finish,
+      taskIds: finishTaskIds,
+    };
+
+    const newState = {
+      ...boardData,
+      columns: {
+        ...boardData.columns,
+        [newStart.id]: newStart,
+        [newFinish.id]: newFinish,
+      },
+    };
+    setBoardData(newState);
   };
 
-  const handleDeleteTask = async (taskId) => {
-    if (!window.confirm('Are you sure you want to delete this task?')) return;
-    
-    setIsLoading(true);
-    try {
-      await deleteTask(taskId);
-      setTasks(tasks.filter(task => task.id !== taskId));
-      toast.success('Task deleted successfully');
-    } catch (error) {
-      setError('Error deleting task');
-      toast.error('Error deleting task');
-    }
-    setIsLoading(false);
+  const openModal = (task = null) => {
+    setCurrentTask(task);
+    setIsModalOpen(true);
   };
 
-  const handleCreateSubtask = async () => {
-    if (!selectedTask || !newSubtask.trim()) return;
-    
-    setIsLoading(true);
-    try {
-      const createdSubtask = await createSubTask(selectedTask.id, { title: newSubtask });
-      setSelectedTask({ 
-        ...selectedTask, 
-        subtasks: [...selectedTask.subtasks, createdSubtask.data] 
+  const closeModal = () => {
+    setCurrentTask(null);
+    setIsModalOpen(false);
+  };
+
+  const openSubtaskModal = (task) => {
+    setCurrentTask(task);
+    setIsSubtaskModalOpen(true);
+  };
+
+  const closeSubtaskModal = () => {
+    setCurrentTask(null);
+    setIsSubtaskModalOpen(false);
+  };
+
+  const moveTaskToInProgress = useCallback((taskId) => {
+    const updatedColumns = { ...boardData.columns };
+    const sourceColumn = Object.values(updatedColumns).find(col => col.taskIds.includes(taskId));
+    const destinationColumn = updatedColumns['column-2'];
+
+    if (sourceColumn.id !== destinationColumn.id) {
+      sourceColumn.taskIds = sourceColumn.taskIds.filter(id => id !== taskId);
+      destinationColumn.taskIds.push(taskId);
+
+      const updatedTasks = { ...boardData.tasks };
+      updatedTasks[taskId] = { ...updatedTasks[taskId], status: 'in-progress' };
+
+      setBoardData({
+        ...boardData,
+        columns: updatedColumns,
+        tasks: updatedTasks,
       });
-      setNewSubtask('');
-      toast.success('Subtask created successfully');
-    } catch (error) {
-      setError('Error creating subtask');
-      toast.error('Error creating subtask');
     }
-    setIsLoading(false);
+  }, [boardData]);
+
+  const addTasksFromTemplate = (template) => {
+    const newTasks = {};
+    const newTaskIds = [];
+  
+    template.tasks.forEach((task) => {
+      const newTaskId = uuidv4();
+      newTasks[newTaskId] = {
+        id: newTaskId,
+        title: task.title,
+        description: task.description || '',
+        dueDate: calculateDueDate(task.dueDate),
+        priority: task.priority.toLowerCase(),
+        subtasks: task.subtasks || [],
+        estimatedTime: task.estimatedTime || '',
+      };
+      newTaskIds.push(newTaskId);
+    });
+  
+    const updatedTasks = { ...boardData.tasks, ...newTasks };
+    const updatedTemplateListColumn = {
+      ...boardData.columns['template-list'],
+      taskIds: [...boardData.columns['template-list'].taskIds, ...newTaskIds],
+    };
+  
+    setBoardData({
+      ...boardData,
+      tasks: updatedTasks,
+      columns: {
+        ...boardData.columns,
+        'template-list': updatedTemplateListColumn,
+      },
+    });
+  
+    setIsTemplateModalOpen(false);
   };
 
+  const getTemplateIcon = (iconName) => {
+    const iconMap = {
+      briefcase: <FaBriefcase />,
+      dumbbell: <FaDumbbell />,
+      home: <FaHome />,
+      ring: <FaRing />,
+      rocket: <FaRocket />,
+      book: <FaBook />,
+      box: <FaBox />,
+      plane: <FaPlane />,
+      'hand-holding-heart': <FaHandHoldingHeart />,
+      'mobile-alt': <FaMobileAlt />,
+      'chart-line': <FaChartLine />,
+      utensils: <FaUtensils />,
+      music: <FaMusic />,
+      seedling: <FaSeedling />,
+      'shield-alt': <FaShieldAlt />,
+      trophy: <FaTrophy />,
+      leaf: <FaLeaf />,
+      microphone: <FaMicrophone />,
+      robot: <FaRobot />,
+      recycle: <FaRecycle />,
+      language: <FaLanguage />,
+    };
 
-  const fetchSubtasks = async (taskId) => {
-    setIsLoading(true);
-    try {
-      const response = await fetchSubTasks(taskId);
-      setSelectedTask({
-        ...selectedTask,
-        subtasks: response.data
-      });
-    } catch (error) {
-      setError('Error fetching subtasks');
-      toast.error('Error fetching subtasks');
+    return iconMap[iconName] || <FaList />;  
+  };
+
+  const calculateDueDate = (dueDateString) => {
+    if (dueDateString === 'today') {
+      return new Date().toISOString().split('T')[0];
     }
-    setIsLoading(false);
+    const days = parseInt(dueDateString.replace('+', '').replace('d', ''));
+    const dueDate = new Date();
+    dueDate.setDate(dueDate.getDate() + days);
+    return dueDate.toISOString().split('T')[0];
+  };   
+
+  const markTaskAsCompleted = (taskId) => {
+    const updatedColumns = { ...boardData.columns };
+    const sourceColumn = Object.values(updatedColumns).find(col => col.taskIds.includes(taskId));
+    const destinationColumn = updatedColumns['column-3']; // Assuming 'column-3' is "Done"
+
+    sourceColumn.taskIds = sourceColumn.taskIds.filter(id => id !== taskId);
+    destinationColumn.taskIds.push(taskId);
+
+    const updatedTasks = { ...boardData.tasks };
+    updatedTasks[taskId] = { 
+      ...updatedTasks[taskId], 
+      status: 'completed',
+      completedAt: new Date().toISOString()
+    };
+
+    setBoardData({
+      ...boardData,
+      columns: updatedColumns,
+      tasks: updatedTasks,
+    });
+  };
+
+  const openManageTaskModal = (task) => {
+    setTaskToManage(task);
+    setShowManageTaskModal(true);
+  };
+
+  const closeManageTaskModal = () => {
+    setTaskToManage(null);
+    setShowManageTaskModal(false);
+  };
+
+  const loadMoreTemplates = () => {
+    templateLoader.loadNextChunk().then(newTemplates => {
+      setTemplates(prevTemplates => [...prevTemplates, ...newTemplates]);
+    });
+  };
+
+  useEffect(() => {
+    // Check for tasks that need to be moved to "In Progress"
+    const now = new Date();
+    Object.values(boardData.tasks).forEach(task => {
+      if (task.startTime && new Date(task.startTime) <= now && task.status !== 'in-progress') {
+        moveTaskToInProgress(task.id);
+      }
+    });
+
+    // Set up interval to check for tasks that need to be moved
+    const interval = setInterval(() => {
+      const currentTime = new Date();
+      Object.values(boardData.tasks).forEach(task => {
+        if (task.startTime && new Date(task.startTime) <= currentTime && task.status !== 'in-progress') {
+          moveTaskToInProgress(task.id);
+        }
+      });
+    }, 60000); // Check every minute
+
+    return () => clearInterval(interval);
+  }, [boardData, moveTaskToInProgress]);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const taskData = Object.fromEntries(formData.entries());
+    
+    const subtasks = formData.getAll('subtasks').map((title, index) => ({
+      id: `subtask-${Date.now()}-${index}`,
+      title,
+      completed: false
+    }));
+  
+    const taskWithSubtasks = {
+      ...taskData,
+      subtasks,
+      estimatedTime: taskData.estimatedTime || ''
+    };
+  
+    let updatedBoardData = { ...boardData };
+  
+    if (currentTask) {
+      const updatedTask = { ...currentTask, ...taskWithSubtasks };
+      updatedBoardData.tasks = { ...updatedBoardData.tasks, [updatedTask.id]: updatedTask };
+  
+      // Remove the task from its current column
+      Object.keys(updatedBoardData.columns).forEach(columnId => {
+        const column = updatedBoardData.columns[columnId];
+        if (column.taskIds.includes(updatedTask.id)) {
+          updatedBoardData.columns[columnId] = {
+            ...column,
+            taskIds: column.taskIds.filter(id => id !== updatedTask.id)
+          };
+        }
+      });
+  
+      // Add the task to the "To Do" column
+      const toDoColumn = updatedBoardData.columns['column-1'];
+      updatedBoardData.columns['column-1'] = {
+        ...toDoColumn,
+        taskIds: [...toDoColumn.taskIds, updatedTask.id]
+      };
+  
+    } else {
+      const newTaskId = `task-${Date.now()}`;
+      const newTask = { id: newTaskId, ...taskWithSubtasks };
+      updatedBoardData.tasks = { ...updatedBoardData.tasks, [newTaskId]: newTask };
+      
+      // Add the new task to the "To Do" column
+      const toDoColumn = updatedBoardData.columns['column-1'];
+      updatedBoardData.columns['column-1'] = {
+        ...toDoColumn,
+        taskIds: [...toDoColumn.taskIds, newTaskId]
+      };
+    }
+  
+    // Update the Template List column
+    if (templateListColumn) {
+      const updatedTemplateListColumn = {
+        ...templateListColumn,
+        taskIds: []
+      };
+      updatedBoardData.columns['template-list'] = updatedTemplateListColumn;
+      setTemplateListColumn(updatedTemplateListColumn);
+    }
+  
+    setBoardData(updatedBoardData);
+    closeModal();
+  };
+
+  const deleteTask = (taskId) => {
+    const newTasks = { ...boardData.tasks };
+    delete newTasks[taskId];
+
+    const newColumns = Object.entries(boardData.columns).reduce((acc, [columnId, column]) => {
+      acc[columnId] = {
+        ...column,
+        taskIds: column.taskIds.filter(id => id !== taskId),
+      };
+      return acc;
+    }, {});
+
+    setBoardData({
+      ...boardData,
+      tasks: newTasks,
+      columns: newColumns,
+    });
+  };
+
+  const addColumn = () => {
+    if (!newColumnTitle.trim()) return;
+  
+    const newColumnId = `column-${Date.now()}`;
+    const newColumn = {
+      id: newColumnId,
+      title: newColumnTitle,
+      taskIds: [],
+    };
+  
+    setBoardData({
+      ...boardData,
+      columns: {
+        ...boardData.columns,
+        [newColumnId]: newColumn,
+      },
+      columnOrder: [...boardData.columnOrder, newColumnId],
+    });
+  
+    setNewColumnTitle('');
   };
   
-
-  const handleCreateCategory = async () => {
-    if (!newCategory.trim()) return;
-    
-    setIsLoading(true);
-    try {
-      const createdCategory = await createCategory({ name: newCategory });
-      setCategories([...categories, createdCategory.data]);
-      setNewCategory('');
-      toast.success('Category created successfully');
-    } catch (error) {
-      setError('Error creating category');
-      toast.error('Error creating category');
-    }
-    setIsLoading(false);
-  };
-
-
-  const handleCreateTag = async () => {
-    if (!newTag.trim()) return;
-    
-    setIsLoading(true);
-    try {
-      const createdTag = await createTag({ name: newTag });
-      setTags([...tags, createdTag.data]);
-      setNewTag('');
-      toast.success('Tag created successfully');
-    } catch (error) {
-      setError('Error creating tag');
-      toast.error('Error creating tag');
-    }
-    setIsLoading(false);
-  };
-
-  const handleCreateTimeLog = async () => {
-    if (!selectedTask || !logDuration) return;
-    
-    setIsLoading(true);
-    try {
-      await createTimeLog(selectedTask.id, { duration: parseInt(logDuration) });
-      toast.success('Time log created successfully');
-      setLogDuration('');
-    } catch (error) {
-      setError('Error creating time log');
-      toast.error('Error creating time log');
-    }
-    setIsLoading(false);
-  };
-
-  const fetchTimeLogs = async (taskId) => {
-    setIsLoading(true);
-    try {
-      const response = await fetchTimeLogs(taskId);
-      setSelectedTask({
-        ...selectedTask,
-        timeLogs: response.data
-      });
-    } catch (error) {
-      setError('Error fetching time logs');
-      toast.error('Error fetching time logs');
-    }
-    setIsLoading(false);
+  const handleSubtaskToggle = (taskId, subtaskId) => {
+    const updatedTasks = { ...boardData.tasks };
+    const task = updatedTasks[taskId];
+    const updatedSubtasks = task.subtasks.map(subtask => 
+      subtask.id === subtaskId ? { ...subtask, completed: !subtask.completed } : subtask
+    );
+    updatedTasks[taskId] = { ...task, subtasks: updatedSubtasks };
+  
+    setBoardData({
+      ...boardData,
+      tasks: updatedTasks,
+    });
   };
   
-
-  const handleAssignTask = async (userId) => {
-    if (!selectedTask) return;
-    
-    setIsLoading(true);
-    try {
-      await assignTask(selectedTask.id, userId);
-      toast.success('Task assigned successfully');
-      // Refresh the selected task to reflect the new assignment
-      const updatedTask = await fetchTasks(selectedTask.id);
-      setSelectedTask(updatedTask.data);
-    } catch (error) {
-      setError('Error assigning task');
-      toast.error('Error assigning task');
-    }
-    setIsLoading(false);
-  };
-
-
-  const handleCreateComment = async () => {
-    if (!selectedTask || !newComment.trim()) return;
-    
-    setIsLoading(true);
-    try {
-      await createComment(selectedTask.id, { content: newComment });
-      toast.success('Comment added successfully');
-      setNewComment('');
-    } catch (error) {
-      setError('Error adding comment');
-      toast.error('Error adding comment');
-    }
-    setIsLoading(false);
-  };
-
-  const fetchComments = async (taskId) => {
-    setIsLoading(true);
-    try {
-      const response = await fetchComments(taskId);
-      setSelectedTask({
-        ...selectedTask,
-        comments: response.data
-      });
-    } catch (error) {
-      setError('Error fetching comments');
-      toast.error('Error fetching comments');
-    }
-    setIsLoading(false);
+  const handleDeleteSubtask = (taskId, subtaskId) => {
+    const updatedTasks = { ...boardData.tasks };
+    const task = updatedTasks[taskId];
+    const updatedSubtasks = task.subtasks.filter(subtask => subtask.id !== subtaskId);
+    updatedTasks[taskId] = { ...task, subtasks: updatedSubtasks };
+  
+    setBoardData({
+      ...boardData,
+      tasks: updatedTasks,
+    });
   };
   
-
-  const handleCreateAttachment = async (file) => {
-    if (!selectedTask || !file) return;
-    
-    setIsLoading(true);
-    try {
-      await createAttachment(selectedTask.id, file);
-      toast.success('Attachment added successfully');
-    } catch (error) {
-      setError('Error adding attachment');
-      toast.error('Error adding attachment');
-    }
-    setIsLoading(false);
-  };
-
-  const fetchAttachments = async (taskId) => {
-    setIsLoading(true);
-    try {
-      const response = await fetchAttachments(taskId);
-      setSelectedTask({
-        ...selectedTask,
-        attachments: response.data
-      });
-    } catch (error) {
-      setError('Error fetching attachments');
-      toast.error('Error fetching attachments');
-    }
-    setIsLoading(false);
+  const handleAddSubtask = (taskId) => {
+    if (!newSubtaskTitle.trim()) return;
+  
+    const updatedTasks = { ...boardData.tasks };
+    const task = updatedTasks[taskId];
+    const newSubtask = {
+      id: `subtask-${Date.now()}`,
+      title: newSubtaskTitle,
+      completed: false,
+    };
+    updatedTasks[taskId] = { ...task, subtasks: [...task.subtasks, newSubtask] };
+  
+    setBoardData({
+      ...boardData,
+      tasks: updatedTasks,
+    });
+  
+    setNewSubtaskTitle('');
   };
   
-
-  const handleSnoozeReminder = async (snoozeTime) => {
-    if (!selectedTask) return;
-    
-    setIsLoading(true);
-    try {
-      await snoozeReminder(selectedTask.id, snoozeTime);
-      toast.success('Reminder snoozed successfully');
-    } catch (error) {
-      setError('Error snoozing reminder');
-      toast.error('Error snoozing reminder');
-    }
-    setIsLoading(false);
+  const handleSubtaskChange = (taskId, subtaskId, newTitle) => {
+    const updatedTasks = { ...boardData.tasks };
+    const task = updatedTasks[taskId];
+    const updatedSubtasks = task.subtasks.map(subtask => 
+      subtask.id === subtaskId ? { ...subtask, title: newTitle } : subtask
+    );
+    updatedTasks[taskId] = { ...task, subtasks: updatedSubtasks };
+  
+    setBoardData({
+      ...boardData,
+      tasks: updatedTasks,
+    });
   };
 
-  const handleSendTaskReminder = async () => {
-    if (!selectedTask) return;
-    
-    setIsLoading(true);
-    try {
-      await sendTaskReminder(selectedTask.id);
-      toast.success('Reminder sent successfully');
-    } catch (error) {
-      setError('Error sending reminder');
-      toast.error('Error sending reminder');
-    }
-    setIsLoading(false);
-  };
-
-  // Task Progress and Filtering Handlers
-  const handleUpdateTaskProgress = async () => {
-    if (!selectedTask || taskProgress < 0 || taskProgress > 100) return;
-    
-    setIsLoading(true);
-    try {
-      await updateTaskProgress(selectedTask.id, taskProgress);
-      toast.success('Task progress updated successfully');
-      // Update the selected task with the new progress
-      setSelectedTask(prevTask => ({
-        ...prevTask,
-        progress: taskProgress
-      }));
-    } catch (error) {
-      setError('Error updating task progress');
-      toast.error('Error updating task progress');
-    }
-    setIsLoading(false);
-  };
-
-
-  const handleFilterTasks = async () => {
-    setIsLoading(true);
-    try {
-      const filteredTasks = await filterTasks(filterPriority, filterTag, filterDeadline);
-      setTasks(filteredTasks.data);
-    } catch (error) {
-      setError('Error filtering tasks');
-      toast.error('Error filtering tasks');
-    }
-    setIsLoading(false);
-  };
-
-  // Google Integration Handlers
-  const handleGoogleLogin = async () => {
-    try {
-      await loginWithGoogle();
-      setIsGoogleAuthenticated(true);
-      toast.success('Google account connected successfully');
-    } catch (error) {
-      setError('Error connecting Google account');
-      toast.error('Error connecting Google account');
-    }
-  };
-
-  const handleCreateGoogleCalendarEvent = async () => {
-    if (!selectedTask) return;
-    
-    setIsLoading(true);
-    try {
-      await createGoogleCalendarEvent(selectedTask.id);
-      toast.success('Event added to Google Calendar');
-    } catch (error) {
-      setError('Error adding event to Google Calendar');
-      toast.error('Error adding event to Google Calendar');
-    }
-    setIsLoading(false);
-  };
-
-  const handleUploadToGoogleDrive = async (file) => {
-    setIsLoading(true);
-    try {
-      await uploadToGoogleDrive(file);
-      toast.success('File uploaded to Google Drive');
-    } catch (error) {
-      setError('Error uploading file to Google Drive');
-      toast.error('Error uploading file to Google Drive');
-    }
-    setIsLoading(false);
-  };
-
-  const handleCreateGoogleSheet = async () => {
-    setIsLoading(true);
-    try {
-      await createGoogleSheet();
-      toast.success('Google Sheet created successfully');
-    } catch (error) {
-      setError('Error creating Google Sheet');
-      toast.error('Error creating Google Sheet');
-    }
-    setIsLoading(false);
-  };
-
-  const handleCreateGoogleDocument = async () => {
-    setIsLoading(true);
-    try {
-      await createGoogleDocument();
-      toast.success('Google Document created successfully');
-    } catch (error) {
-      setError('Error creating Google Document');
-      toast.error('Error creating Google Document');
-    }
-    setIsLoading(false);
-  };
-
-  const handleCreateGoogleForm = async () => {
-    setIsLoading(true);
-    try {
-      await createGoogleForm();
-      toast.success('Google Form created successfully');
-    } catch (error) {
-      setError('Error creating Google Form');
-      toast.error('Error creating Google Form');
-    }
-    setIsLoading(false);
-  };
-
-  const handleListGoogleDriveFiles = async () => {
-    setIsLoading(true);
-    try {
-      const files = await listGoogleDriveFiles();
-      console.log(files);
-      toast.success('Google Drive files retrieved successfully');
-    } catch (error) {
-      setError('Error listing Google Drive files');
-      toast.error('Error listing Google Drive files');
-    }
-    setIsLoading(false);
-  };
-
-  const handleGetGoogleSheetData = async (spreadsheetId) => {
-    setIsLoading(true);
-    try {
-      const data = await getGoogleSheetData(spreadsheetId);
-      console.log(data);
-      toast.success('Google Sheet data retrieved successfully');
-    } catch (error) {
-      setError('Error retrieving Google Sheet data');
-      toast.error('Error retrieving Google Sheet data');
-    }
-    setIsLoading(false);
-  };
-
-  const handleUpdateGoogleDocument = async (documentId, content) => {
-    setIsLoading(true);
-    try {
-      await updateGoogleDocument(documentId, content);
-      toast.success('Google Document updated successfully');
-    } catch (error) {
-      setError('Error updating Google Document');
-      toast.error('Error updating Google Document');
-    }
-    setIsLoading(false);
-  };
-
-  const handleAddQuestionsToGoogleForm = async (formId, questions) => {
-    setIsLoading(true);
-    try {
-      await addQuestionsToGoogleForm(formId, questions);
-      toast.success('Questions added to Google Form successfully');
-    } catch (error) {
-      setError('Error adding questions to Google Form');
-      toast.error('Error adding questions to Google Form');
-    }
-    setIsLoading(false);
-  };
-
-  const handleListGoogleCalendarEvents = async () => {
-    setIsLoading(true);
-    try {
-      const events = await listGoogleCalendarEvents();
-      console.log(events);
-      toast.success('Google Calendar events retrieved successfully');
-    } catch (error) {
-      setError('Error listing Google Calendar events');
-      toast.error('Error listing Google Calendar events');
-    }
-    setIsLoading(false);
-  };
-
-  const handleDeleteGoogleDriveFile = async (fileId) => {
-    setIsLoading(true);
-    try {
-      await deleteGoogleDriveFile(fileId);
-      toast.success('Google Drive file deleted successfully');
-    } catch (error) {
-      setError('Error deleting Google Drive file');
-      toast.error('Error deleting Google Drive file');
-    }
-    setIsLoading(false);
-  };
-
-  const handleUpdateGoogleSheetData = async (spreadsheetId, range, values) => {
-    setIsLoading(true);
-    try {
-      await updateGoogleSheetData(spreadsheetId, range, values);
-      toast.success('Google Sheet data updated successfully');
-    } catch (error) {
-      setError('Error updating Google Sheet data');
-      toast.error('Error updating Google Sheet data');
-    }
-    setIsLoading(false);
-  };
-
-  const handleUpdateGoogleCalendarEvent = async (eventId, eventData) => {
-    setIsLoading(true);
-    try {
-      await updateGoogleCalendarEvent(eventId, eventData);
-      toast.success('Google Calendar event updated successfully');
-    } catch (error) {
-      setError('Error updating Google Calendar event');
-      toast.error('Error updating Google Calendar event');
-    }
-    setIsLoading(false);
-  };
-
-  // Menu Configuration
-  const menuItems = [
-    { 
-      icon: <FaTasks />, 
-      text: 'Tasks', 
-      action: toggleTasksDropdown,
-      subItems: [
-        { text: 'All Tasks', action: () => setActiveView('tasks') },
-        { text: 'Create Task', action: () => setShowCreateTask(true) },
-        { text: 'Filter Tasks', action: () => setActiveView('filterTasks') },
-        { text: 'Manage Categories', action: () => setActiveView('manageCategories') },
-        { text: 'Manage Tags', action: () => setActiveView('manageTags') },
-        { text: 'Assign Tasks', action: () => setActiveView('assignTasks') },
-        { text: 'Task Reminders', action: () => setActiveView('taskReminders') },
-      ]
-    },
-    { icon: <FaCalendarAlt />, text: 'Calendar', action: () => navigate('/calendar') },
-    { icon: <FaGoogle />, text: 'Google Services', action: () => setActiveView('googleServices') },
-    { icon: <FaGoogle />, text: 'Google Integration', action: () => setActiveView('googleIntegration') },
-    { icon: <FaChartBar />, text: 'Analytics', action: () => navigate('/analytics') },
-  ];
-
-  const headerDropdownItems = [
-    { icon: <FaHome />, text: 'Home', action: () => navigate('/') },
-    { icon: <FaUserCircle />, text: 'Profile', action: () => navigate('/profile') },
-    { icon: <FaClipboardList />, text: 'Dashboard', action: () => navigate('/dashboard') },
-    { icon: <FaBell />, text: 'Notifications', action: () => navigate('/notifications') },
-    { icon: <FaCog />, text: 'Settings', action: () => navigate('/settings') },
-    { icon: <FaSignOutAlt />, text: 'Logout', action: logout },
-  ];
-
-  // Handle task creation callback
-  const handleTaskCreated = (newTask) => {
-    setTasks([...tasks, newTask]);
-    setShowCreateTask(false);
-    toast.success('Task created successfully');
-  };
-
-  const handleDeleteCategory = async (categoryId) => {
-    if (!window.confirm('Are you sure you want to delete this category?')) return;
-    
-    setIsLoading(true);
-    try {
-      await deleteCategory(categoryId);
-      setCategories(categories.filter(category => category.id !== categoryId));
-      toast.success('Category deleted successfully');
-    } catch (error) {
-      setError('Error deleting category');
-      toast.error('Error deleting category');
-    }
-    setIsLoading(false);
-  };
-
-  const handleDeleteTag = async (tagId) => {
-    if (!window.confirm('Are you sure you want to delete this tag?')) return;
-    
-    setIsLoading(true);
-    try {
-      await deleteTag(tagId);
-      setTags(tags.filter(tag => tag.id !== tagId));
-      toast.success('Tag deleted successfully');
-    } catch (error) {
-      setError('Error deleting tag');
-      toast.error('Error deleting tag');
-    }
-    setIsLoading(false);
-  };
-
-  return (
-    <PageContainer>
-      <Header>
-        <HeaderTitle>TaskSphere</HeaderTitle>
-        <HeaderDropdown>
-          <DropdownToggle>
-            <UserIcon />
-            <span>{user?.first_name || user?.username}</span>
-            <ChevronIcon />
-          </DropdownToggle>
-          <DropdownMenu>
-            {headerDropdownItems.map((item, index) => (
-              <DropdownItem key={index} onClick={item.action}>
-                {item.icon}
-                {item.text}
-              </DropdownItem>
-            ))}
-          </DropdownMenu>
-        </HeaderDropdown>
-      </Header>  
-
-      <ContentWrapper>
-        <Sidebar
-          initial={false}
-          animate={{ width: isMenuOpen ? '250px' : '60px' }}
-        >
-          <MenuToggle onClick={toggleMenu}>
-            <FaBars />
-          </MenuToggle>
-          <AnimatePresence>
-            {menuItems.map((item, index) => (
-              <React.Fragment key={index}>
-                <MenuItem
-                  onClick={item.action}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{ delay: index * 0.1 }}
-                >
-                  {item.icon}
-                  {isMenuOpen && item.text}
-                </MenuItem>
-                {isMenuOpen && item.subItems && isTasksDropdownOpen && (
-                  <DropdownContainer>
-                    <DropdownContent
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                    >
-                      {item.subItems.map((subItem, subIndex) => (
-                        <MenuItem key={subIndex} onClick={subItem.action}>
-                          {subItem.text}
-                        </MenuItem>
-                      ))}
-                    </DropdownContent>
-                  </DropdownContainer>
-                )}
-              </React.Fragment>
-            ))}
-          </AnimatePresence>
-        </Sidebar>
-
-        <MainContent>
-          {showCreateTask ? (
-            <CreateTask 
-              onClose={() => setShowCreateTask(false)}
-              onTaskCreated={handleTaskCreated}
-            />
-          ) : (
-            <>
-              {activeView === 'tasks' && (
-                <>
-                  <ProfileSection>
-                    <WelcomeMessage>
-                      Welcome, {user?.first_name || user?.username}!
-                    </WelcomeMessage>
-                    {user && (
-                      <>
-                        <p>Email: {user.email}</p>
-                        <p>Last Login: {new Date(user.last_login).toLocaleString()}</p>
-                      </>
-                    )}
-                  </ProfileSection>
-                  <QuickActions>
-                    <ActionButton onClick={() => setShowCreateTask(true)}>
-                      <FaPlus /> Create Task
-                    </ActionButton>
-                    <ActionButton onClick={() => navigate('/time-tracking')}>
-                      <FaClock /> Time Tracking
-                    </ActionButton>
-                    <ActionButton onClick={() => navigate('/manage-tags')}>
-                      <FaTag /> Manage Tags
-                    </ActionButton>
-                    <ActionButton onClick={() => navigate('/manage-categories')}>
-                      <FaFolder /> Manage Categories
-                    </ActionButton>
-                  </QuickActions>
-
-                  {isLoading ? (
-                    <Spinner />
-                  ) : error ? (
-                    <ErrorMessage>{error}</ErrorMessage>
-                  ) : (
-                    <TaskList>
-                      {tasks.map(task => (
-                        <Task key={task.id}>
-                          <TaskTitle>{task.title}</TaskTitle>
-                          <TaskDescription>{task.description}</TaskDescription>
-                          <Badge>{task.category.name}</Badge>
-                          <Badge priority={task.priority}>
-                            {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}
-                          </Badge>
-                          <ProgressBar>
-                            <ProgressFill width={task.progress || 0} />
-                          </ProgressBar>
-                          <TaskActions>
-                            <TaskActionButton
-                              onClick={() => handleUpdateTask(task.id, { completed: !task.completed })}
-                            >
-                              {task.completed ? 'Unmark Complete' : 'Mark Complete'}
-                            </TaskActionButton>
-                            <TaskActionButton onClick={() => setSelectedTask(task)}>
-                              View Details
-                            </TaskActionButton>
-                            <TaskActionButton onClick={() => handleDeleteTask(task.id)}>
-                              Delete
-                            </TaskActionButton>
-                          </TaskActions>
-                        </Task>
-                      ))}
-                    </TaskList>
-                  )}
-                </>
-              )}
-
-              {(activeView === 'googleServices' || activeView === 'googleIntegration') && (
-                <Section>
-                  <SectionTitle>
-                    {activeView === 'googleServices' ? 'Google Services' : 'Google Integration'}
-                  </SectionTitle>
-                  {!isGoogleAuthenticated ? (
-                    <Card>
-                      <CardContent style={{ textAlign: 'center', padding: '2rem' }}>
-                        <Button 
-                          onClick={handleGoogleLogin} 
-                          style={{ fontSize: '1.1rem', padding: '1rem 2rem' }}
-                        >
-                          <FaGoogle style={{ marginRight: '0.5rem' }} /> Connect Google Account
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  ) : (
-                    <GoogleServices
-                      isGoogleAuthenticated={isGoogleAuthenticated}
-                      onGoogleLogin={handleGoogleLogin}
-                      onCreateCalendarEvent={handleCreateGoogleCalendarEvent}
-                      onUploadToDrive={handleUploadToGoogleDrive}
-                      onCreateSheet={handleCreateGoogleSheet}
-                      onCreateDocument={handleCreateGoogleDocument}
-                      onCreateForm={handleCreateGoogleForm}
-                      onListDriveFiles={handleListGoogleDriveFiles}
-                      onGetSheetData={handleGetGoogleSheetData}
-                      onUpdateDocument={handleUpdateGoogleDocument}
-                      onAddFormQuestions={handleAddQuestionsToGoogleForm}
-                      onListCalendarEvents={handleListGoogleCalendarEvents}
-                      onDeleteDriveFile={handleDeleteGoogleDriveFile}
-                      onUpdateSheetData={handleUpdateGoogleSheetData}
-                      onUpdateCalendarEvent={handleUpdateGoogleCalendarEvent}
-                    />
-                  )}
-                </Section>
-              )}
-
-              {activeView === 'filterTasks' && (
-                <Section>
-                  <SectionTitle>Filter Tasks</SectionTitle>
-                  <FormGroup>
-                    <Label>Priority</Label>
-                    <Select
-                      value={filterPriority}
-                      onChange={(e) => setFilterPriority(e.target.value)}
-                    >
-                      <option value="">All</option>
-                      <option value="high">High</option>
-                      <option value="medium">Medium</option>
-                      <option value="low">Low</option>
-                    </Select>
-
-                    <Label>Tag</Label>
-                    <Select
-                      value={filterTag}
-                      onChange={(e) => setFilterTag(e.target.value)}
-                    >
-                      <option value="">All</option>
-                      {tags.map(tag => (
-                        <option key={tag.id} value={tag.id}>{tag.name}</option>
-                      ))}
-                    </Select>
-
-                    <Label>Deadline</Label>
-                    <Input
-                      type="date"
-                      value={filterDeadline}
-                      onChange={(e) => setFilterDeadline(e.target.value)}
-                    />
-
-                    <Button onClick={handleFilterTasks}>
-                      Apply Filters
-                    </Button>
-                  </FormGroup>
-                </Section>
-              )}
-
-              {activeView === 'manageCategories' && (
-                <Section>
-                  <SectionTitle>Manage Categories</SectionTitle>
-                  <Input
-                   type="text"
-                   value={newCategory}
-                   onChange={(e) => setNewCategory(e.target.value)}
-                   placeholder="New Category Name"
-                 />
-                 <Button onClick={handleCreateCategory}>Create Category</Button>
-                 {/* List existing categories here */}
-                 {categories.map(category => (
-                   <div key={category.id}>
-                     <span>{category.name}</span>
-                     <Button onClick={() => handleDeleteCategory(category.id)}>Delete</Button>
-                   </div>
-                  ))}
-                </Section>
-              )}
-
-              {activeView === 'manageTags' && (
-                <Section>
-                  <SectionTitle>Manage Tags</SectionTitle>
-                  <Input
-                    type="text"
-                    value={newTag}
-                    onChange={(e) => setNewTag(e.target.value)}
-                    placeholder="New Tag Name"
-                 />
-                 <Button onClick={handleCreateTag}>Create Tag</Button>
-                 {/* List existing tags here */}
-                 {tags.map(tag => (
-                   <div key={tag.id}>
-                     <span>{tag.name}</span>
-                     <Button onClick={() => handleDeleteTag(tag.id)}>Delete</Button>
-                   </div>
-                  ))}
-                </Section>
-              )}
-              {activeView === 'taskDetails' && selectedTask && (
-                <Section>
-                  <TaskDetailHeader>
-                    <SectionTitle>Task Details</SectionTitle>
-                    <Button variant="secondary" onClick={() => setActiveView('tasks')}>
-                      <FaArrowLeft /> Back to Tasks
-                    </Button>
-                  </TaskDetailHeader>
-
-                  <Card>
-                    <TaskTitleContainer>
-                      <h2>{selectedTask.title}</h2>
-                      <Badge priority={selectedTask.priority}>
-                        {selectedTask.priority.charAt(0).toUpperCase() + selectedTask.priority.slice(1)}
-                      </Badge>
-                    </TaskTitleContainer>
-
-                    <TaskDetailsContainer>
-                      <TaskInfoCard>
-                        <p>{selectedTask.description}</p>
-                        <TagsContainer>
-                          <Badge>{selectedTask.category.name}</Badge>
-                          <Badge>{new Date(selectedTask.due_date).toLocaleDateString()}</Badge>
-                          {selectedTask.tags?.map((tag, index) => (
-                            <Badge key={index} style={{ background: '#e9ecef' }}>{tag}</Badge>
-                          ))}
-                        </TagsContainer>
-                      </TaskInfoCard>
-
-                      {selectedTask && (
-                         <Section>
-                           <SectionTitle>Assign Task</SectionTitle>
-                           <Select
-                             value={selectedUserId}
-                             onChange={(e) => setSelectedUserId(e.target.value)}
-                           >
-                             {/* Populate with user options */}
-                           </Select>
-                           <Button onClick={() => handleAssignTask(selectedUserId)}>Assign Task</Button>
-                         </Section>
-                      )}
-
-                      {/* Progress Section */}
-                      <DetailSection>
-                        <Label>Progress Tracking</Label>
-                        <ProgressBar height="12px" margin="1rem 0">
-                          <ProgressFill width={taskProgress} />
-                        </ProgressBar>
-                        <ProgressContainer>
-                          <Input
-                            type="range"
-                            min="0"
-                            max="100"
-                            value={taskProgress}
-                            onChange={(e) => setTaskProgress(parseInt(e.target.value))}
-                          />
-                          <span>{taskProgress}%</span>
-                          <Button onClick={handleUpdateTaskProgress} minWidth="120px">
-                            Update Progress
-                          </Button>
-                        </ProgressContainer>
-                      </DetailSection>
-
-                      {/* Subtasks Section */}
-                      <DetailSection>
-                        <Label>Subtasks</Label>
-                        <InputGroup>
-                          <Input
-                            value={newSubtask}
-                            onChange={(e) => setNewSubtask(e.target.value)}
-                            placeholder="Enter new subtask"
-                          />
-                          <Button onClick={handleCreateSubtask}>Add Subtask</Button>
-                        </InputGroup>
-                        <SubtaskList>
-                        {selectedTask.subtasks?.map((subtask, index) => (
-                            <SubtaskItem key={subtask.id || index}>
-                              <input
-                                type="checkbox"
-                                checked={subtask.completed}
-                                onChange={() => handleUpdateTask(subtask.id, { completed: !subtask.completed })}
-                              />
-                              <span>{subtask.title}</span>
-                            </SubtaskItem>
-                          ))}
-                        </SubtaskList>
-                      </DetailSection>
-
-                      {/* Time Tracking Section */}
-                      <DetailSection>
-                        <Label>Time Tracking</Label>
-                        <TimeTrackingContainer>
-                          <Input
-                            type="number"
-                            value={logDuration}
-                            onChange={(e) => setLogDuration(e.target.value)}
-                            placeholder="Duration in minutes"
-                          />
-                          <Button onClick={handleCreateTimeLog}>Log Time</Button>
-                        </TimeTrackingContainer>
-                      </DetailSection>
-
-                      {/* Comments Section */}
-                      <DetailSection>
-                        <Label>Comments</Label>
-                        <InputGroup>
-                          <TextArea
-                            value={newComment}
-                            onChange={(e) => setNewComment(e.target.value)}
-                            placeholder="Add a comment"
-                          />
-                          <Button onClick={handleCreateComment}>Add Comment</Button>
-                        </InputGroup>
-                      </DetailSection>
-
-                      {/* Attachments Section */}
-                      <DetailSection>
-                        <Label>Attachments</Label>
-                        <FileUploadZone>
-                          <FileInput
-                            type="file"
-                            onChange={(e) => handleCreateAttachment(e.target.files[0])}
-                          />
-                        </FileUploadZone>
-                      </DetailSection>
-
-                      {/* Reminders Section */}
-                      <DetailSection>
-                        <Label>Reminders</Label>
-                        <ReminderContainer>
-                          <Input
-                            type="datetime-local"
-                            value={snoozeTime}
-                            onChange={(e) => setSnoozeTime(e.target.value)}
-                          />
-                          <Button onClick={() => handleSnoozeReminder(snoozeTime)}>
-                            Snooze Reminder
-                          </Button>
-                          <Button onClick={handleSendTaskReminder}>
-                            Send Reminder Now
-                          </Button>
-                        </ReminderContainer>
-                      </DetailSection>
-                    </TaskDetailsContainer>
-                  </Card>
-                </Section>
-              )}
-            </>
-          )}
-        </MainContent>
-      </ContentWrapper>
-    </PageContainer>
-  );
+  const setTaskTime = (taskId) => {
+  const task = boardData.tasks[taskId];
+  setTaskToSetTime(task);
+  setIsSetTimeModalOpen(true);
+  setShowEndTimeInput(false);
 };
 
-export default ProfileHome;
+const handleSetTime = (e) => {
+  e.preventDefault();
+  const formData = new FormData(e.target);
+  const startTime = formData.get('startTime');
+  const endTime = formData.get('endTime');
+
+  if (taskToSetTime) {
+    const updatedTask = {
+      ...taskToSetTime,
+      startTime,
+      endTime,
+      status: 'in-progress'
+    };
+
+    const updatedTasks = {
+      ...boardData.tasks,
+      [taskToSetTime.id]: updatedTask
+    };
+
+    // Move task to "In Progress" column
+    const fromColumn = Object.values(boardData.columns).find(col => col.taskIds.includes(taskToSetTime.id));
+    const toColumn = boardData.columns['column-2']; // Assuming 'column-2' is "In Progress"
+
+    const updatedColumns = {
+      ...boardData.columns,
+      [fromColumn.id]: {
+        ...fromColumn,
+        taskIds: fromColumn.taskIds.filter(id => id !== taskToSetTime.id)
+      },
+      [toColumn.id]: {
+        ...toColumn,
+        taskIds: [...toColumn.taskIds, taskToSetTime.id]
+      }
+    };
+
+    setBoardData({
+      ...boardData,
+      tasks: updatedTasks,
+      columns: updatedColumns
+    });
+
+    setIsSetTimeModalOpen(false);
+    setTaskToSetTime(null);
+    setShowEndTimeInput(false);
+
+    // Set up a timer to move the task when the start time is reached
+    const timeUntilStart = new Date(startTime) - new Date();
+    if (timeUntilStart > 0) {
+      setTimeout(() => {
+        moveTaskToInProgress(taskToSetTime.id);
+      }, timeUntilStart);
+    } else {
+      moveTaskToInProgress(taskToSetTime.id);
+    }
+  }
+};
 
 
+return (
+  <KanbanContainer>
+    <BoardHeader>
+      <BoardTitle>TaskSphere Kanban Board</BoardTitle>
+      <div>
+        <AddButton onClick={() => openModal()}>
+          <FaPlus /> Add Task
+        </AddButton>
+        <AddButton onClick={() => setIsTemplateModalOpen(true)}>
+          <FaList /> Templates
+        </AddButton>
+      </div>
+    </BoardHeader>
+    <DragDropContext onDragEnd={onDragEnd}>
+      <Droppable droppableId="all-columns" direction="horizontal" type="column">
+        {(provided) => (
+          <ColumnsContainer {...provided.droppableProps} ref={provided.innerRef}>
+            {boardData.columnOrder.map((columnId, index) => {
+              const column = boardData.columns[columnId];
+              if (!column) return null;
+              const tasks = column.taskIds
+                .map(taskId => boardData.tasks[taskId])
+                .filter(Boolean);
+
+              return (
+                <Draggable key={column.id} draggableId={column.id} index={index}>
+                  {(provided) => (
+                    <Column
+                      {...provided.draggableProps}
+                      ref={provided.innerRef}
+                    >
+                      <ColumnHeader {...provided.dragHandleProps}>
+                        <ColumnTitle>{column.title}</ColumnTitle>
+                        <FaEllipsisV />
+                      </ColumnHeader>
+                      <Droppable droppableId={column.id} type="task">
+                        {(provided, snapshot) => (
+                          <TaskList
+                            ref={provided.innerRef}
+                            {...provided.droppableProps}
+                            isDraggingOver={snapshot.isDraggingOver}
+                          >
+                            {tasks.map((task, index) => (
+                              <Draggable key={task.id} draggableId={task.id} index={index}>
+                                {(provided, snapshot) => (
+                                  <Task
+                                    ref={provided.innerRef}
+                                    {...provided.draggableProps}
+                                    {...provided.dragHandleProps}
+                                    isDragging={snapshot.isDragging}
+                                    onClick={() => openModal(task)}
+                                  >
+                                    <TaskTitle>{task.title}</TaskTitle>
+                                    <TaskDescription>{task.description}</TaskDescription>
+                                    <TaskMeta>
+                                      <TaskMetaItem>{task.dueDate}</TaskMetaItem>
+                                      <TaskMetaItem>{task.estimatedTime}</TaskMetaItem>
+                                      <TaskMetaItem>Subtasks: {task.subtasks?.length || 0}</TaskMetaItem>
+                                      <TaskPriority priority={task.priority}>
+                                        {task.priority}
+                                      </TaskPriority>
+                                    </TaskMeta>
+                                  </Task>
+                                )}
+                              </Draggable>
+                            ))}
+                            {provided.placeholder}
+                          </TaskList>
+                        )}
+                      </Droppable>
+                    </Column>
+                  )}
+                </Draggable>
+              );
+            })}
+            {provided.placeholder}
+          </ColumnsContainer>
+        )}
+      </Droppable>
+    </DragDropContext>
+
+    <div>
+      <Input
+        type="text"
+        value={newColumnTitle}
+        onChange={(e) => setNewColumnTitle(e.target.value)}
+        placeholder="New column title"
+      />
+      <Button onClick={addColumn}>Add Column</Button>
+    </div>
+
+    <AnimatePresence>
+      {isModalOpen && (
+        <ModalOverlay
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          <ModalContent
+            initial={{ y: 50, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 50, opacity: 0 }}
+          >
+            <CloseButton onClick={closeModal}>
+              <FaTimes />
+            </CloseButton>
+            <h2>{currentTask ? 'Edit Task' : 'Add New Task'}</h2>
+            <Form onSubmit={handleSubmit}>
+              <Input
+                type="text"
+                name="title"
+                placeholder="Task Title"
+                defaultValue={currentTask?.title || ''}
+                required
+              />
+              <TextArea
+                name="description"
+                placeholder="Task Description"
+                defaultValue={currentTask?.description || ''}
+              />
+              <Input
+                type="date"
+                name="dueDate"
+                defaultValue={currentTask?.dueDate || ''}
+              />
+              <Select name="priority" defaultValue={currentTask?.priority || 'medium'}>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </Select>
+              <EstimatedTimeInput
+                type="text"
+                name="estimatedTime"
+                placeholder="Estimated Time (e.g., 2h 30m)"
+                defaultValue={currentTask?.estimatedTime || ''}
+              />
+              <ButtonGroup>
+                <Button type="submit">
+                  {currentTask ? 'Update Task' : 'Add Task'}
+                </Button>
+                {currentTask && (
+                  <>
+                    <Button type="button" onClick={() => openManageTaskModal(currentTask)}>
+                      <FaBriefcase /> Manage Task
+                    </Button>
+                    <Button type="button" onClick={() => openSubtaskModal(currentTask)}>
+                      <FaList /> Manage Subtasks
+                    </Button>
+                  </>
+                )}
+              </ButtonGroup>
+            </Form>
+          </ModalContent>
+        </ModalOverlay>
+      )}
+    </AnimatePresence>
+
+    <AnimatePresence>
+      {showManageTaskModal && taskToManage && (
+        <ModalOverlay
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          <ModalContent
+            initial={{ y: 50, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 50, opacity: 0 }}
+          >
+            <CloseButton onClick={closeManageTaskModal}>
+              <FaTimes />
+            </CloseButton>
+            <h2>Manage Task</h2>
+            <ButtonGroup>
+              <Button onClick={() => deleteTask(taskToManage.id)}>
+                <FaTrash /> Delete Task
+              </Button>
+              <Button onClick={() => markTaskAsCompleted(taskToManage.id)}>
+                <FaCheck /> Mark as Completed
+              </Button>
+              <Button onClick={() => setTaskTime(taskToManage.id)}>
+                <FaClock /> Set Time
+              </Button>
+            </ButtonGroup>
+          </ModalContent>
+        </ModalOverlay>
+      )}
+    </AnimatePresence>
+
+    <AnimatePresence>
+      {isTemplateModalOpen && (
+        <ModalOverlay
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          <ModalContent
+            initial={{ y: 50, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 50, opacity: 0 }}
+          >
+            <CloseButton onClick={() => setIsTemplateModalOpen(false)}>
+              <FaTimes />
+            </CloseButton>
+            <h2>Choose a Template</h2>
+            <TemplateGrid>
+              {templates.map((template) => (
+                <TemplateItem
+                  key={template.id}
+                  template={template}
+                  onSelect={() => addTasksFromTemplate(template)}
+                  getTemplateIcon={getTemplateIcon}
+                />  
+              ))}
+              {templates.length < totalTemplateCount && (
+                <LoadMoreButton onClick={loadMoreTemplates}>
+                  Load More Templates
+                </LoadMoreButton>
+              )}
+            </TemplateGrid>
+          </ModalContent>
+        </ModalOverlay>
+      )}
+    </AnimatePresence>
+
+    <AnimatePresence>
+      {isSubtaskModalOpen && currentTask && (
+        <ModalOverlay
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          <ModalContent
+            initial={{ y: 50, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 50, opacity: 0 }}
+          >
+            <CloseButton onClick={closeSubtaskModal}>
+              <FaTimes />
+            </CloseButton>
+            <h2>Manage Subtasks</h2>
+            <SubtaskList>
+              {currentTask.subtasks?.map((subtask) => (
+                <SubtaskItem key={subtask.id}>
+                  <SubtaskCheckbox
+                    type="checkbox"
+                    checked={subtask.completed}
+                    onChange={() => handleSubtaskToggle(currentTask.id, subtask.id)}
+                  />
+                  <SubtaskInput
+                    type="text"
+                    value={subtask.title}
+                    onChange={(e) => handleSubtaskChange(currentTask.id, subtask.id, e.target.value)}
+                  />
+                  <SubtaskDeleteButton onClick={() => handleDeleteSubtask(currentTask.id, subtask.id)}>
+                    <FaTrash />
+                  </SubtaskDeleteButton>
+                </SubtaskItem>
+              ))}
+              <SubtaskItem>
+                <SubtaskInput
+                  type="text"
+                  value={newSubtaskTitle}
+                  onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                  placeholder="New subtask"
+                />
+                <SubtaskAddButton onClick={() => handleAddSubtask(currentTask.id)}>
+                  Add
+                </SubtaskAddButton>
+              </SubtaskItem>
+            </SubtaskList>
+          </ModalContent>
+        </ModalOverlay>
+      )}
+    </AnimatePresence>
+
+    <AnimatePresence>
+      {isSetTimeModalOpen && (
+        <ModalOverlay
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          <ModalContent
+            initial={{ y: 50, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 50, opacity: 0 }}
+          >
+            <CloseButton onClick={() => setIsSetTimeModalOpen(false)}>
+              <FaTimes />
+            </CloseButton>
+            <h2>Set Task Time</h2>
+            <Form onSubmit={handleSetTime}>
+              <Input
+                type="datetime-local"
+                name="startTime"
+                placeholder="Start Time"
+                required
+              />
+              {showEndTimeInput && (
+                <Input
+                  type="datetime-local"
+                  name="endTime"
+                  placeholder="End Time"
+                  required
+                />
+              )}
+              <Button type="submit">Set Time</Button>
+            </Form>
+          </ModalContent>
+        </ModalOverlay>
+      )}
+    </AnimatePresence>
+  </KanbanContainer>
+);
+}
+
+export default KanbanBoard;

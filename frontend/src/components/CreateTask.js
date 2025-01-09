@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { createTask } from '../services/api';
 import styled, { keyframes } from 'styled-components';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { format } from 'date-fns';
-import { FaArrowLeft, FaPlus, FaTimes, FaChevronDown } from 'react-icons/fa';
+import { FaPlus, FaTimes, FaChevronDown, FaSpinner } from 'react-icons/fa';
+import { createTask } from '../services/api';  
+
 
 // Animations
 const fadeIn = keyframes`
@@ -36,57 +36,29 @@ const theme = {
 };
 
 // Styled Components
-const PageContainer = styled.div`
-  min-height: 100vh;
-  background: ${theme.background};
-  padding: 2rem;
+const ModalOverlay = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
   display: flex;
-  flex-direction: column;
+  justify-content: center;
   align-items: center;
-
-  @media (max-width: 768px) {
-    padding: 1rem;
-  }
+  z-index: 1000;
 `;
 
-const FormContainer = styled.div`
-  width: 100%;
-  max-width: 800px;
+const ModalContent = styled.div`
   background: ${theme.cardBg};
   border-radius: 16px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   padding: 2rem;
-  animation: ${fadeIn} 0.5s ease-out;
-
-  @media (max-width: 768px) {
-    padding: 1.5rem;
-  }
-`;
-
-const NavigationBar = styled.div`
-  display: flex;
-  align-items: center;
-  margin-bottom: 2rem;
-  width: 100%;
-  max-width: 800px;
-`;
-
-const BackButton = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  background: transparent;
-  border: none;
-  color: ${theme.primary};
-  cursor: pointer;
-  font-size: 1rem;
-  transition: all 0.3s ease;
-
-  &:hover {
-    color: ${theme.hover};
-    transform: translateX(-2px);
-  }
+  width: 90%;
+  max-width: 600px;
+  max-height: 90vh;
+  overflow-y: auto;
+  animation: ${fadeIn} 0.3s ease-out;
 `;
 
 const Header = styled.header`
@@ -96,14 +68,9 @@ const Header = styled.header`
 
 const Title = styled.h1`
   color: ${theme.text};
-  font-size: 2.5rem;
+  font-size: 2rem;
   margin-bottom: 0.5rem;
   font-weight: 600;
-`;
-
-const Subtitle = styled.p`
-  color: ${theme.darkGray};
-  font-size: 1.1rem;
 `;
 
 const Form = styled.form`
@@ -145,15 +112,6 @@ const Input = styled.input`
     border-color: ${theme.primary};
     box-shadow: 0 0 0 3px ${theme.primary}30;
   }
-
-  &::placeholder {
-    color: ${theme.darkGray}80;
-  }
-
-  &:disabled {
-    background: ${theme.lightGray};
-    cursor: not-allowed;
-  }
 `;
 
 const TextArea = styled.textarea`
@@ -171,10 +129,6 @@ const TextArea = styled.textarea`
     outline: none;
     border-color: ${theme.primary};
     box-shadow: 0 0 0 3px ${theme.primary}30;
-  }
-
-  &::placeholder {
-    color: ${theme.darkGray}80;
   }
 `;
 
@@ -199,12 +153,6 @@ const DropdownButton = styled.button`
 
   &:hover {
     border-color: ${theme.primary};
-  }
-
-  &:focus {
-    outline: none;
-    border-color: ${theme.primary};
-    box-shadow: 0 0 0 3px ${theme.primary}30;
   }
 `;
 
@@ -231,52 +179,6 @@ const DropdownItem = styled.div`
 
   &:hover {
     background: ${theme.lightGray};
-  }
-`;
-
-const CategoryGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 0.75rem;
-  margin-top: 0.5rem;
-`;
-
-const CategoryButton = styled.button`
-  padding: 0.75rem;
-  background: ${props => props.selected ? `${theme.primary}20` : theme.background};
-  border: 2px solid ${props => props.selected ? theme.primary : theme.border};
-  border-radius: 8px;
-  color: ${props => props.selected ? theme.primary : theme.text};
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-
-  &:hover {
-    border-color: ${theme.primary};
-    background: ${theme.primary}10;
-  }
-`;
-
-const PriorityGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.75rem;
-  margin-top: 0.5rem;
-`;
-
-const PriorityButton = styled.button`
-  padding: 0.75rem;
-  background: ${props => props.selected ? `${props.color}20` : theme.background};
-  border: 2px solid ${props => props.selected ? props.color : theme.border};
-  border-radius: 8px;
-  color: ${props => props.selected ? props.color : theme.text};
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-
-  &:hover {
-    border-color: ${props => props.color};
-    background: ${props => `${props.color}10`};
   }
 `;
 
@@ -352,17 +254,17 @@ const Button = styled.button`
     background: ${props => props.variant === 'secondary' ? theme.lightGray : theme.hover};
     transform: translateY(-1px);
   }
+`;
 
-  &:focus {
-    outline: none;
-    box-shadow: 0 0 0 3px ${theme.primary}30;
-  }
+const Spinner = styled(FaSpinner)`
+  animation: spin 1s linear infinite;
 
-  &:disabled {
-    background: ${theme.lightGray};
-    cursor: not-allowed;
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
   }
 `;
+
 
 const ErrorMessage = styled.div`
   color: ${theme.danger};
@@ -376,21 +278,7 @@ const ErrorMessage = styled.div`
   gap: 0.5rem;
 `;
 
-const LoadingSpinner = styled.div`
-  width: 20px;
-  height: 20px;
-  border: 2px solid ${theme.cardBg};
-  border-top-color: transparent;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-
-  @keyframes spin {
-    to { transform: rotate(360deg); }
-  }
-`;
-
 function CreateTask({ onClose, onTaskCreated }) {
-  const [isFormDirty, setIsFormDirty] = useState(false);
   const [task, setTask] = useState({
     title: '',
     description: '',
@@ -404,22 +292,17 @@ function CreateTask({ onClose, onTaskCreated }) {
   });
 
   const [subtaskInput, setSubtaskInput] = useState('');
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [isCategoryOpen, setIsCategoryOpen] = useState(false);
   const [isPriorityOpen, setIsPriorityOpen] = useState(false);
+  const [isSubtaskModalOpen, setIsSubtaskModalOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [isFormDirty, setIsFormDirty] = useState(false);
+
 
   const categories = [
-    'Work',
-    'Personal',
-    'Shopping',
-    'Health',
-    'Education',
-    'Home',
-    'Finance',
-    'Projects',
-    'Meetings',
-    'Events'
+    'Work', 'Personal', 'Shopping', 'Health', 'Education',
+    'Home', 'Finance', 'Projects', 'Meetings', 'Events'
   ];
 
   const priorities = [
@@ -454,7 +337,6 @@ function CreateTask({ onClose, onTaskCreated }) {
       ...prevTask,
       category: prevTask.category === category ? '' : category
     }));
-    setIsFormDirty(true);
     setIsCategoryOpen(false);
   };
 
@@ -463,7 +345,6 @@ function CreateTask({ onClose, onTaskCreated }) {
       ...prevTask,
       priority
     }));
-    setIsFormDirty(true);
     setIsPriorityOpen(false);
   };
 
@@ -474,7 +355,6 @@ function CreateTask({ onClose, onTaskCreated }) {
         subtasks: [...prevTask.subtasks, { title: subtaskInput.trim(), completed: false }]
       }));
       setSubtaskInput('');
-      setIsFormDirty(true);
     }
   };
 
@@ -483,7 +363,6 @@ function CreateTask({ onClose, onTaskCreated }) {
       ...prevTask,
       subtasks: prevTask.subtasks.filter((_, i) => i !== index)
     }));
-    setIsFormDirty(true);
   };
 
   const validateForm = () => {
@@ -505,10 +384,10 @@ function CreateTask({ onClose, onTaskCreated }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validateForm()) return;
-  
+
     setLoading(true);
     setError('');
-  
+
     try {
       const taskData = {
         ...task,
@@ -517,9 +396,12 @@ function CreateTask({ onClose, onTaskCreated }) {
         progress: Number(task.progress),
         completed: false
       };
-  
+
+      // Simulate a 1-second delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
       const response = await createTask(taskData);
-  
+
       if (response.status === 201) {
         toast.success('Task created successfully!');
         setIsFormDirty(false);
@@ -537,30 +419,15 @@ function CreateTask({ onClose, onTaskCreated }) {
     }
   };
 
-  const handleCancel = () => {
-    if (isFormDirty) {
-      if (window.confirm('You have unsaved changes. Are you sure you want to leave?')) {
-        onClose();
-      }
-    } else {
-      onClose();
-    }
-  };
 
   return (
-    <PageContainer>
-      <ToastContainer position="top-right" />
-      <NavigationBar>
-        <BackButton onClick={handleCancel}>
-          <FaArrowLeft /> Back
-        </BackButton>
-      </NavigationBar>
-      <FormContainer>
+    <ModalOverlay>
+      <ModalContent>
+        <ToastContainer position="top-right" />
         <Header>
           <Title>Create New Task</Title>
-          <Subtitle>Add a new task to your TaskSphere</Subtitle>
         </Header>
-
+  
         <Form onSubmit={handleSubmit}>
           <FormGroup>
             <Label htmlFor="title">
@@ -577,7 +444,7 @@ function CreateTask({ onClose, onTaskCreated }) {
               autoFocus
             />
           </FormGroup>
-
+  
           <FormGroup>
             <Label htmlFor="description">Description</Label>
             <TextArea
@@ -588,7 +455,7 @@ function CreateTask({ onClose, onTaskCreated }) {
               placeholder="Enter task description"
             />
           </FormGroup>
-
+  
           <FormGroup>
             <Label>
               Category <span className="required">*</span>
@@ -609,7 +476,7 @@ function CreateTask({ onClose, onTaskCreated }) {
               )}
             </DropdownContainer>
           </FormGroup>
-
+  
           <FormGroup>
             <Label>Priority Level</Label>
             <DropdownContainer>
@@ -619,7 +486,7 @@ function CreateTask({ onClose, onTaskCreated }) {
               </DropdownButton>
               {isPriorityOpen && (
                 <DropdownContent>
-                  {priorities.map(({ value, label, color }) => (
+                  {priorities.map(({ value, label }) => (
                     <DropdownItem key={value} onClick={() => handlePrioritySelect(value)}>
                       {label}
                     </DropdownItem>
@@ -628,7 +495,7 @@ function CreateTask({ onClose, onTaskCreated }) {
               )}
             </DropdownContainer>
           </FormGroup>
-
+  
           <FormGroup>
             <Label htmlFor="due_date">
               Due Date <span className="required">*</span>
@@ -642,7 +509,7 @@ function CreateTask({ onClose, onTaskCreated }) {
               required
             />
           </FormGroup>
-
+  
           <FormGroup>
             <Label htmlFor="estimated_time">Estimated Time</Label>
             <Input
@@ -654,9 +521,40 @@ function CreateTask({ onClose, onTaskCreated }) {
               placeholder="e.g., 2 hours"
             />
           </FormGroup>
-
-          <FormGroup>
-            <Label>Subtasks</Label>
+  
+          {error && (
+            <ErrorMessage>
+              <FaTimes /> {error}
+            </ErrorMessage>
+          )}
+  
+          <ButtonGroup>
+            <Button 
+              type="button" 
+              variant="secondary" 
+              onClick={onClose}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? <Spinner /> : 'Create Task'}
+            </Button>
+            <Button 
+              type="button" 
+              onClick={() => setIsSubtaskModalOpen(true)}
+            >
+              Manage Subtasks
+            </Button>
+          </ButtonGroup>
+        </Form>
+      </ModalContent>
+  
+      {isSubtaskModalOpen && (
+        <ModalOverlay>
+          <ModalContent>
+            <Header>
+              <Title>Manage Subtasks</Title>
+            </Header>
             <SubtaskContainer>
               <SubtaskInput>
                 <Input
@@ -701,34 +599,20 @@ function CreateTask({ onClose, onTaskCreated }) {
                 </SubtaskList>
               )}
             </SubtaskContainer>
-          </FormGroup>
-
-          {error && (
-            <ErrorMessage>
-              <FaTimes /> {error}
-            </ErrorMessage>
-          )}
-
-          <ButtonGroup>
-            <Button 
-              type="button" 
-              variant="secondary" 
-              onClick={handleCancel}
-            >
-              Cancel
-            </Button>
-            <Button 
-              type="submit" 
-              disabled={loading}
-            >
-              {loading ? <LoadingSpinner /> : 'Create Task'}
-            </Button>
-          </ButtonGroup>
-        </Form>
-      </FormContainer>
-    </PageContainer>
+            <ButtonGroup>
+              <Button 
+                type="button" 
+                onClick={() => setIsSubtaskModalOpen(false)}
+              >
+                Close
+              </Button>
+            </ButtonGroup>
+          </ModalContent>
+        </ModalOverlay>
+      )}
+    </ModalOverlay>
   );
-}
-
-export default CreateTask;
-
+  }
+  
+  export default CreateTask;
+  

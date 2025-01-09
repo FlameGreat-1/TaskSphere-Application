@@ -7,6 +7,9 @@ import { toast } from 'react-toastify';
 import { useNotification } from '../context/NotificationContext';
 import NotificationPopup from '../components/NotificationPopup';
 import Settings from '../components/Settings';
+import AIInsights from '../components/AIIntegration/AIInsights';
+import { FaRobot } from 'react-icons/fa';
+
 
 
 
@@ -551,10 +554,12 @@ const ProfileHome = () => {
         { text: 'Manage Tags', action: () => setActiveView('manageTags') },
         { text: 'Assign Tasks', action: () => setActiveView('assignTasks') },
         { text: 'Task Reminders', action: () => setActiveView('taskReminders') },
+        { text: 'Time Tracking', action: () => setActiveView('timetracking') },
       ]
     },
     { icon: <FaCalendarAlt />, text: 'Calendar', action: () => navigate('/calendar') },
     { icon: <FaGoogle />, text: 'Google Services', action: () => setActiveView('googleServices') },
+    { icon: <FaRobot />, text: 'AI Insights', action: () => setActiveView('aiInsights') },
     { icon: <FaChartBar />, text: 'Analytics', action: () => navigate('/analytics') },
   ];
 
@@ -719,17 +724,9 @@ const ProfileHome = () => {
                   <Settings/>
                   <QuickActions>
                     <ActionButton onClick={() => setShowCreateTask(true)}>
-                      <FaPlus /> Create Task
+                      <FaPlus /> Recents
                     </ActionButton>
-                    <ActionButton onClick={() => navigate('/time-tracking')}>
-                      <FaClock /> Time Tracking
-                    </ActionButton>
-                    <ActionButton onClick={() => navigate('/manage-tags')}>
-                      <FaTag /> Manage Tags
-                    </ActionButton>
-                    <ActionButton onClick={() => navigate('/manage-categories')}>
-                      <FaFolder /> Manage Categories
-                    </ActionButton>
+                    
                   </QuickActions>
 
                   {isLoading ? (
@@ -782,6 +779,9 @@ const ProfileHome = () => {
               )}
               {activeView === 'taskReminders' && (
                 <TaskReminders tasks={tasks} />
+              )}
+              {activeView === 'aiInsights' && (
+                <AIInsights />
               )}
               {activeView === 'googleServices' && (
                 <GoogleServices
