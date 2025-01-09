@@ -1,58 +1,40 @@
-node_modules/ 
-.env 
-node_modules/  echo .env 
+# General
+.DS_Store
+*.log
+*.tmp
+*.temp
 
-# Virtual environment
+# Backend (Django)
+Backend/__pycache__/
+Backend/*.pyc
+Backend/db.sqlite3
+Backend/media/
+Backend/static/
+Backend/.env
+
+# Frontend (React)
+Frontend/node_modules/
+Frontend/build/
+Frontend/.env
+Frontend/.env.local
+Frontend/.env.development.local
+Frontend/.env.test.local
+Frontend/.env.production.local
+Frontend/npm-debug.log*
+Frontend/yarn-debug.log*
+Frontend/yarn-error.log*
+
+# dotenv environment variables file
+.env
+*.env
+
+# Virtual Environment
 venv/
 env/
 .venv/
-/backend/venv/
 
-echo backend/config/tasksphere-5a0ea-firebase-adminsdk-cl0o6-530598abd7.json >> .gitignore
-echo backend/config/skilled-nation-404607-db50d00d6ee8.json >> .gitignore
-
-
-# Python cache files
-__pycache__/
-*.py[cod]
-
-# Django stuff:
-*.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
-
-# Flask stuff:
-instance/
-.webassets-cache
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# pyenv
-.python-version
-
-# pipenv
-Pipfile.lock
-
-# Environment variables
-.env
-
-# IDE specific files
+# IDEs
 .vscode/
 .idea/
 *.swp
 *.swo
-
-# Google API
-google-services.json
-GoogleService-Info.plist
-credentials.json
-token.json
-
-# Firebase
-firebase.json
-.firebaserc
-firebase-debug.log
-database-debug.log
-firebase-debug.*.log
